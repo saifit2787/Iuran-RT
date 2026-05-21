@@ -23,6 +23,11 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f4f8;color:#2d3748;m
 tbody tr.row-saldo-awal td{background:#fffbeb;color:#92400e;font-style:italic}
 tbody tr.row-saldo-awal td.col-masuk{background:#fef3c7;color:#92400e}
 tbody tr.row-saldo-awal td.col-saldo{color:#92400e}
+/* ── TOTAL ROW (col[0] = "Total") ── */
+tbody tr.row-gray-total td{background:#e2e8f0;color:#2d3748;font-weight:700}
+tbody tr.row-gray-total td.col-masuk{background:#d1dae6;color:#1a365d}
+tbody tr.row-gray-total td.col-keluar{background:#d1dae6;color:#742a2a}
+tbody tr.row-gray-total td.col-saldo{background:#d1dae6;color:#2c5282}
 
 /* ── MAIN CONTENT ── */
 .content{padding:1.2rem;max-width:1200px;margin:0 auto}
@@ -71,10 +76,16 @@ td.col-keluar{color:#9b2c2c;font-weight:600;background:#fff5f5}
 /* Saldo col */
 td.col-saldo{font-weight:600;color:#2b6cb0}
 /* Total row */
-tr.row-total td{background:#1a56db;color:#fff;font-weight:700;border-bottom:none}
+/* tr.row-total td{background:#1a56db;color:#fff;font-weight:700;border-bottom:none}
 tr.row-total td.col-masuk{background:#1557a0;color:#fff}
 tr.row-total td.col-keluar{background:#1557a0;color:#fff}
-tr.row-total td.col-saldo{background:#1557a0;color:#fff}
+tr.row-total td.col-saldo{background:#1557a0;color:#fff} */
+
+/* tr.row-total td{background:#edf2f7;color:#2d3748;font-weight:700;border-top:2px solid #cbd5e0;border-bottom:none}
+tr.row-total td.col-masuk{background:#c6f6d5;color:#22543d}
+tr.row-total td.col-keluar{background:#fed7d7;color:#742a2a}
+tr.row-total td.col-saldo{background:#bee3f8;color:#2c5282} */
+/* Pengeluaran rows (no income) */
 /* Pengeluaran rows (no income) */
 .ket-cell{font-size:.75rem;color:#718096;max-width:180px;word-break:break-word}
 .metode-badge{display:inline-block;font-size:.7rem;padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
@@ -323,8 +334,11 @@ function renderSection(idx) {
     const isKeluar = !masuk && keluar;
     // Baris saldo awal: no=1 dan transaksi mengandung kata "Saldo"
     const isSaldoAwal = r[IDX.no]==='1' && /saldo/i.test(transaksi);
+    // Baris Total: kolom pertama berisi teks "Total"
+    const isGrandTotal = r[IDX.no].trim().toLowerCase() === 'total';
     const metodeClass = metode==='tranfer'?'tranfer': metode==='tunai'?'tunai':'other';
-    const rowClass = isSaldoAwal ? 'row-saldo-awal' : isKeluar ? 'row-keluar' : '';
+    // const rowClass = isSaldoAwal ? 'row-saldo-awal' : isKeluar ? 'row-keluar' : '';
+    const rowClass = isGrandTotal ? 'row-gray-total' : isSaldoAwal ? 'row-saldo-awal' : isKeluar ? 'row-keluar' : '';
 
     return `<tr class="${rowClass}">
       <td>${r[IDX.no]||''}</td>
@@ -342,10 +356,10 @@ function renderSection(idx) {
 
   // Total row
   const totalHtml = `<tr class="row-total">
-    <td colspan="5" style="text-align:right;padding-right:12px">Total</td>
-    <td class="col-masuk">Rp ${numStr(masukTotal)}</td>
-    <td class="col-keluar">Rp ${numStr(keluarTotal)}</td>
-    <td class="col-saldo">Rp ${numStr(saldoFinal)}</td>
+    <td colspan="5" style="text-align:right;padding-right:12px">KAS Masuk/Keluar per bulan</td>
+    <td >Rp ${numStr(masukTotal)}</td>
+    <td >Rp ${numStr(keluarTotal)}</td>
+    <td ></td>
     <td colspan="2"></td>
   </tr>`;
 
