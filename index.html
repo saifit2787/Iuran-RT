@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Laporan Keuangan Kas RT 08 RW 13</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f4f8;color:#2d3748;min-height:100vh}
+
+/* ── TOP HEADER ── */
+.top-header{background:linear-gradient(135deg,#1a56db 0%,#1e429f 100%);color:#fff;padding:1.4rem 1.5rem 1rem;text-align:center}
+.top-header h1{font-size:1.3rem;font-weight:700;letter-spacing:.3px}
+.top-header p{font-size:.85rem;opacity:.85;margin-top:4px}
+.badge-info{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:3px 12px;font-size:.78rem;margin-top:8px}
+
+/* ── TABS ── */
+.tab-scroll{overflow-x:auto;background:#fff;border-bottom:2px solid #e2e8f0;padding:0 1rem;-webkit-overflow-scrolling:touch}
+.tab-scroll::-webkit-scrollbar{height:4px}
+.tab-scroll::-webkit-scrollbar-thumb{background:#cbd5e0;border-radius:2px}
+.tabs{display:flex;gap:4px;padding:.5rem 0;min-width:max-content}
+.tab-btn{padding:6px 14px;border:1.5px solid #e2e8f0;background:transparent;border-radius:20px;font-size:.82rem;cursor:pointer;white-space:nowrap;color:#4a5568;transition:all .18s;font-weight:500}
+.tab-btn:hover{border-color:#1a56db;color:#1a56db;background:#ebf5ff}
+.tab-btn.active{background:#1a56db;color:#fff;border-color:#1a56db}
+
+/* ── MAIN CONTENT ── */
+.content{padding:1.2rem;max-width:1200px;margin:0 auto}
+
+/* ── TABLE SECTION ── */
+.tbl-section{display:none}
+.tbl-section.visible{display:block}
+
+/* ── CENTERED TITLE ── */
+.tbl-title{background:#fff;border-radius:10px 10px 0 0;border:1px solid #e2e8f0;border-bottom:none;padding:1rem 1.5rem;text-align:center}
+.tbl-title .lk{font-size:.8rem;color:#718096;letter-spacing:.5px;text-transform:uppercase;font-weight:600}
+.tbl-title .rt{font-size:1rem;font-weight:700;color:#2d3748;margin:.2rem 0}
+.tbl-title .bulan{font-size:1.15rem;font-weight:700;color:#1a56db;margin:.2rem 0}
+
+/* ── SUMMARY CARDS ── */
+.summary-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;background:#fff;border:1px solid #e2e8f0;border-top:none;border-bottom:none;padding:.75rem 1rem}
+.s-card{text-align:center;padding:.6rem;border-radius:8px}
+.s-card.masuk{background:#f0fdf4;border:1px solid #bbf7d0}
+.s-card.keluar{background:#fff5f5;border:1px solid #fed7d7}
+.s-card.saldo{background:#ebf8ff;border:1px solid #bee3f8}
+.s-card .s-label{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.s-card.masuk .s-label{color:#276749}
+.s-card.keluar .s-label{color:#9b2c2c}
+.s-card.saldo .s-label{color:#2b6cb0}
+.s-card .s-val{font-size:.95rem;font-weight:700}
+.s-card.masuk .s-val{color:#22543d}
+.s-card.keluar .s-val{color:#742a2a}
+.s-card.saldo .s-val{color:#2c5282}
+
+/* ── TABLE WRAPPER ── */
+.tbl-card{background:#fff;border-radius:0 0 10px 10px;border:1px solid #e2e8f0;overflow:hidden}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:.82rem}
+thead th{background:#1a56db;color:#fff;padding:9px 10px;text-align:left;white-space:nowrap;font-weight:600;font-size:.8rem;position:sticky;top:0;z-index:1}
+thead th:first-child{width:38px;text-align:center}
+tbody tr{border-bottom:1px solid #f0f4f8;transition:background .1s}
+tbody tr:hover{background:#f7fafc}
+tbody tr.row-keluar{background:#fff9f9}
+tbody tr.row-keluar:hover{background:#fff5f5}
+tbody td{padding:7px 10px;vertical-align:top}
+tbody td:first-child{text-align:center;color:#718096;font-size:.75rem}
+/* Pemasukan col */
+td.col-masuk{color:#276749;font-weight:600;background:#f0fff4}
+/* Pengeluaran col */
+td.col-keluar{color:#9b2c2c;font-weight:600;background:#fff5f5}
+/* Saldo col */
+td.col-saldo{font-weight:600;color:#2b6cb0}
+/* Total row */
+tr.row-total td{background:#1a56db;color:#fff;font-weight:700;border-bottom:none}
+tr.row-total td.col-masuk{background:#1557a0;color:#fff}
+tr.row-total td.col-keluar{background:#1557a0;color:#fff}
+tr.row-total td.col-saldo{background:#1557a0;color:#fff}
+/* Pengeluaran rows (no income) */
+.ket-cell{font-size:.75rem;color:#718096;max-width:180px;word-break:break-word}
+.metode-badge{display:inline-block;font-size:.7rem;padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap}
+.badge-tranfer{background:#ebf8ff;color:#2b6cb0}
+.badge-tunai{background:#f0fff4;color:#276749}
+.badge-other{background:#f7faff;color:#553c9a}
+
+/* ── LOADING / ERROR ── */
+.state-box{text-align:center;padding:3rem 1rem;background:#fff;border-radius:10px;border:1px solid #e2e8f0;margin-top:1rem}
+.spinner{display:inline-block;width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#1a56db;border-radius:50%;animation:spin .65s linear infinite;margin-bottom:.8rem}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:#c53030;font-size:.9rem}
+.err code{font-size:.8rem;background:#fff5f5;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:.4rem}
+
+/* ── TOOLBAR ── */
+.toolbar{display:flex;align-items:center;gap:.6rem;padding:.6rem 1rem;background:#fff;border:1px solid #e2e8f0;border-bottom:none;border-radius:10px 10px 0 0;flex-wrap:wrap}
+.toolbar.no-title{border-radius:0;border-top:none}
+.search-input{flex:1;min-width:160px;padding:6px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:.83rem;outline:none;transition:border .15s}
+.search-input:focus{border-color:#1a56db}
+.row-info{font-size:.78rem;color:#718096;margin-left:auto;white-space:nowrap}
+.btn{padding:6px 13px;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px;transition:opacity .15s;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-blue{background:#1a56db;color:#fff}
+.btn-gray{background:#edf2f7;color:#4a5568}
+
+@media(max-width:600px){
+  .summary-row{grid-template-columns:1fr 1fr}
+  .s-card.saldo{grid-column:1/-1}
+  .content{padding:.75rem}
+}
+</style>
+</head>
+<body>
+
+<div class="top-header">
+  <h1>📋 Laporan Keuangan Kas RT</h1>
+  <p>RT 08 RW 13 LPR Pilang – Sidodadi</p>
+  <span class="badge-info" id="badge-months">Memuat data...</span>
+</div>
+
+<div class="tab-scroll"><div class="tabs" id="tabs"></div></div>
+
+<div class="content" id="content">
+  <div class="state-box">
+    <div class="spinner"></div>
+    <p>Memuat data dari Google Sheet...</p>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ✏️  GANTI URL INI — proxy.php di server kamu
+//     atau langsung URL CSV Google Sheet jika tidak kena CORS
+// ============================================================
+const DATA_URL = "proxy.php";
+
+// ============================================================
+// GLOBAL STATE
+// ============================================================
+let sections = [];
+let activeIdx = 0;
+let searchQuery = "";
+
+// ============================================================
+// CSV PARSER
+// ============================================================
+function parseCSV(text) {
+  const rows = [];
+  let row = [], f = "", inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], n = text[i+1];
+    if (inQ) {
+      if (c==='"' && n==='"'){f+='"';i++;}
+      else if (c==='"'){inQ=false;}
+      else f+=c;
+    } else {
+      if (c==='"'){inQ=true;}
+      else if (c===','){row.push(f.trim());f="";}
+      else if (c==='\n'||(c==='\r'&&n==='\n')){
+        if(c==='\r')i++;
+        row.push(f.trim());f="";
+        rows.push(row);row=[];
+      } else f+=c;
+    }
+  }
+  if(f||row.length){row.push(f.trim());rows.push(row);}
+  return rows;
+}
+
+// ============================================================
+// PARSE MULTI-TABLE SECTIONS
+// ============================================================
+function parseSections(rows) {
+  const result = [];
+
+  // Find all "Bulan" line indices
+  const bulanIdxs = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] && /^Bulan\s+/i.test(rows[i][0].trim())) {
+      bulanIdxs.push(i);
+    }
+  }
+
+  for (let s = 0; s < bulanIdxs.length; s++) {
+    const bi = bulanIdxs[s];
+    const nextBi = (bulanIdxs[s+1] != null) ? bulanIdxs[s+1] : rows.length;
+    const label = rows[bi][0].trim(); // e.g. "Bulan Mei 2025"
+
+    // find header row (No., Tanggal, ...)
+    let hIdx = -1;
+    for (let i = bi+1; i < nextBi; i++) {
+      if (rows[i][0] && rows[i][0].trim() === 'No.') { hIdx = i; break; }
+    }
+    if (hIdx === -1) continue;
+
+    const headers = rows[hIdx];
+    const dataRows = [];
+    let totalRow = null;
+
+    for (let i = hIdx+1; i < nextBi; i++) {
+      const r = rows[i];
+      if (!r || r.every(c => !c || !c.trim())) continue;
+
+      const col0 = (r[0]||'').trim();
+      const col4 = (r[4]||'').trim();
+      const col5 = (r[5]||'').trim();
+
+      // Grand total row: col0 empty, col5 starts with "Rp"
+      if (!col0 && col5.startsWith('Rp')) { totalRow = r; continue; }
+
+      // Per-bulan/pemasukan row — skip it (just for summary cards we use totalRow)
+      if (!col0 && (col4.includes('Total per bulan') || col4.includes('Pemasukan dan pengeluaran'))) continue;
+      // Some months have no label — row like ",,,,,610.000,445.480,,,"
+      if (!col0 && !col4 && col5 && /^\d/.test(col5)) continue;
+
+      // Skip rows with number-only in col0 but no other data
+      if (col0 && !isNaN(col0.replace('.','')) && r.slice(1).every(c => !c || !c.trim())) continue;
+
+      // Skip meta rows
+      if (col0.includes('Laporan') || col0.includes('RT 08') || /^Bulan\s/i.test(col0)) continue;
+
+      dataRows.push(r);
+    }
+
+    result.push({ label, headers, dataRows, totalRow });
+  }
+
+  return result;
+}
+
+// ============================================================
+// CURRENCY FORMAT
+// ============================================================
+function fmtRp(val) {
+  if (!val || !val.toString().trim()) return '';
+  // Strip "Rp", spaces, handle Indonesian thousands with dots
+  const clean = val.toString().replace(/Rp\s*/g,'').replace(/\s/g,'').replace(/,00$/,'');
+  if (!clean) return '';
+  // Already formatted with dots e.g. "1.937.500" — just prefix
+  if (/^\d[\d.]*$/.test(clean)) return 'Rp ' + clean;
+  return 'Rp ' + clean;
+}
+
+function parseNum(val) {
+  if (!val) return 0;
+  const s = val.toString().replace(/Rp\s*/g,'').replace(/\./g,'').replace(/,\d+$/,'').trim();
+  return parseInt(s) || 0;
+}
+
+function numStr(n) {
+  return n.toLocaleString('id-ID');
+}
+
+// ============================================================
+// RENDER TABS
+// ============================================================
+function renderTabs() {
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = sections.map((s, i) =>
+    `<button class="tab-btn${i===activeIdx?' active':''}" onclick="switchTab(${i})">${s.label.replace('Bulan ','')}</button>`
+  ).join('');
+  document.getElementById('badge-months').textContent = sections.length + ' bulan data';
+}
+
+function switchTab(i) {
+  activeIdx = i;
+  searchQuery = "";
+  renderTabs();
+  renderSection(i);
+}
+
+// ============================================================
+// RENDER SECTION
+// ============================================================
+function renderSection(idx) {
+  const sec = sections[idx];
+  const content = document.getElementById('content');
+
+  // Filter data
+  const q = searchQuery.toLowerCase();
+  const filtered = q
+    ? sec.dataRows.filter(r => r.some(c => (c||'').toLowerCase().includes(q)))
+    : sec.dataRows;
+
+  // Summary from totalRow or compute from data
+  let masukTotal = 0, keluarTotal = 0, saldoFinal = 0;
+  if (sec.totalRow) {
+    masukTotal = parseNum(sec.totalRow[5]);
+    keluarTotal = parseNum(sec.totalRow[6]);
+    saldoFinal = parseNum(sec.totalRow[7]);
+  } else {
+    filtered.forEach(r => {
+      masukTotal += parseNum(r[5]);
+      keluarTotal += parseNum(r[6]);
+    });
+    const lastRow = sec.dataRows[sec.dataRows.length-1];
+    if (lastRow) saldoFinal = parseNum(lastRow[7]);
+  }
+
+  // Header indices (headers: No,Tanggal,Nama,No.Rumah,Transaksi,Pemasukan,Pengeluaran,Saldo,Metode,Ket)
+  const IDX = { no:0,tgl:1,nama:2,norumah:3,transaksi:4,masuk:5,keluar:6,saldo:7,metode:8,ket:9 };
+
+  // Build table rows
+  const rowsHtml = filtered.map((r, ri) => {
+    const masuk = (r[IDX.masuk]||'').trim();
+    const keluar = (r[IDX.keluar]||'').trim();
+    const saldo = (r[IDX.saldo]||'').trim();
+    const metode = (r[IDX.metode]||'').trim().toLowerCase();
+    const isKeluar = !masuk && keluar;
+    const metodeClass = metode==='tranfer'?'tranfer': metode==='tunai'?'tunai':'other';
+
+    return `<tr class="${isKeluar?'row-keluar':''}">
+      <td>${r[IDX.no]||''}</td>
+      <td style="white-space:nowrap;font-size:.78rem">${r[IDX.tgl]||''}</td>
+      <td style="font-weight:500">${r[IDX.nama]||''}</td>
+      <td style="text-align:center;font-size:.78rem">${r[IDX.norumah]||''}</td>
+      <td>${r[IDX.transaksi]||''}</td>
+      <td class="col-masuk">${masuk?fmtRp(masuk):''}</td>
+      <td class="col-keluar">${keluar?fmtRp(keluar):''}</td>
+      <td class="col-saldo">${saldo?fmtRp(saldo):''}</td>
+      <td><span class="metode-badge badge-${metodeClass}">${r[IDX.metode]||''}</span></td>
+      <td class="ket-cell">${r[IDX.ket]||''}</td>
+    </tr>`;
+  }).join('');
+
+  // Total row
+  const totalHtml = `<tr class="row-total">
+    <td colspan="5" style="text-align:right;padding-right:12px">Total</td>
+    <td class="col-masuk">Rp ${numStr(masukTotal)}</td>
+    <td class="col-keluar">Rp ${numStr(keluarTotal)}</td>
+    <td class="col-saldo">Rp ${numStr(saldoFinal)}</td>
+    <td colspan="2"></td>
+  </tr>`;
+
+  content.innerHTML = `
+  <div class="tbl-section visible">
+    <div class="tbl-title">
+      <div class="lk">Laporan Keuangan</div>
+      <div class="rt">RT 08 RW 13 LPR Pilang – Sidodadi</div>
+      <div class="bulan">${sec.label}</div>
+    </div>
+
+    <div class="summary-row">
+      <div class="s-card masuk">
+        <div class="s-label">⬆ Pemasukan</div>
+        <div class="s-val">Rp ${numStr(masukTotal)}</div>
+      </div>
+      <div class="s-card keluar">
+        <div class="s-label">⬇ Pengeluaran</div>
+        <div class="s-val">Rp ${numStr(keluarTotal)}</div>
+      </div>
+      <div class="s-card saldo">
+        <div class="s-label">💰 Saldo Akhir</div>
+        <div class="s-val">Rp ${numStr(saldoFinal)}</div>
+      </div>
+    </div>
+
+    <div class="toolbar no-title">
+      <input class="search-input" type="text" placeholder="🔍 Cari nama, transaksi..."
+        value="${searchQuery}" oninput="onSearch(this.value)"/>
+      <span class="row-info">${filtered.length} transaksi</span>
+      <button class="btn btn-blue" onclick="loadData()">↺ Refresh</button>
+      <button class="btn btn-gray" onclick="exportSection()">⬇ Export CSV</button>
+    </div>
+
+    <div class="tbl-card">
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>No</th><th>Tanggal</th><th>Nama</th><th>No. Rumah</th>
+            <th>Transaksi</th>
+            <th style="background:#0f6b42">Pemasukan</th>
+            <th style="background:#9b1c1c">Pengeluaran</th>
+            <th style="background:#1e3a5f">Saldo</th>
+            <th>Metode</th><th>Keterangan</th>
+          </tr></thead>
+          <tbody>${rowsHtml}${totalHtml}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function onSearch(val) {
+  searchQuery = val;
+  renderSection(activeIdx);
+  // restore search value
+  const inp = document.querySelector('.search-input');
+  if (inp) { inp.value = val; inp.focus(); }
+}
+
+// ============================================================
+// EXPORT CSV
+// ============================================================
+function exportSection() {
+  const sec = sections[activeIdx];
+  const q = searchQuery.toLowerCase();
+  const rows = q ? sec.dataRows.filter(r=>r.some(c=>(c||'').toLowerCase().includes(q))) : sec.dataRows;
+  const all = [sec.headers, ...rows];
+  const csv = all.map(r=>r.map(c=>`"${(c||'').replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = sec.label.replace(/\s+/g,'_')+'.csv';
+  a.click();
+}
+
+// ============================================================
+// LOAD DATA
+// ============================================================
+async function loadData() {
+  document.getElementById('content').innerHTML =
+    `<div class="state-box"><div class="spinner"></div><p>Memuat data dari Google Sheet...</p></div>`;
+  document.getElementById('tabs').innerHTML = '';
+  document.getElementById('badge-months').textContent = 'Memuat...';
+
+  try {
+    const res = await fetch(DATA_URL + (DATA_URL.includes('?')?'&':'?') + '_t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    sections = parseSections(rows);
+
+    if (!sections.length) throw new Error('Tidak ada data bulan yang ditemukan. Pastikan format CSV sesuai.');
+
+    activeIdx = sections.length - 1; // tampilkan bulan terakhir dulu
+    renderTabs();
+    renderSection(activeIdx);
+
+    // Scroll tab aktif ke tengah
+    setTimeout(() => {
+      const active = document.querySelector('.tab-btn.active');
+      if (active) active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+    }, 100);
+
+  } catch(e) {
+    document.getElementById('content').innerHTML =
+      `<div class="state-box err">
+        <div style="font-size:2rem;margin-bottom:.5rem">⚠️</div>
+        <p><strong>Gagal memuat data</strong></p>
+        <code>${e.message}</code>
+        <p style="margin-top:.75rem;font-size:.82rem;color:#555">
+          Pastikan <code>proxy.php</code> sudah diupload dan URL Sheet sudah benar.<br>
+          Buka <strong>proxy.php</strong> langsung di browser untuk tes.
+        </p>
+        <button class="btn btn-blue" onclick="loadData()" style="margin:.75rem auto 0;display:inline-flex">↺ Coba Lagi</button>
+      </div>`;
+    document.getElementById('badge-months').textContent = 'Error';
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
