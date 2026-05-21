@@ -14,14 +14,15 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:#f0f4f8;color:#2d3748;m
 .top-header p{font-size:.85rem;opacity:.85;margin-top:4px}
 .badge-info{display:inline-block;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:3px 12px;font-size:.78rem;margin-top:8px}
 
-/* ── TABS ── */
-.tab-scroll{overflow-x:auto;background:#fff;border-bottom:2px solid #e2e8f0;padding:0 1rem;-webkit-overflow-scrolling:touch}
-.tab-scroll::-webkit-scrollbar{height:4px}
-.tab-scroll::-webkit-scrollbar-thumb{background:#cbd5e0;border-radius:2px}
-.tabs{display:flex;gap:4px;padding:.5rem 0;min-width:max-content}
-.tab-btn{padding:6px 14px;border:1.5px solid #e2e8f0;background:transparent;border-radius:20px;font-size:.82rem;cursor:pointer;white-space:nowrap;color:#4a5568;transition:all .18s;font-weight:500}
-.tab-btn:hover{border-color:#1a56db;color:#1a56db;background:#ebf5ff}
-.tab-btn.active{background:#1a56db;color:#fff;border-color:#1a56db}
+/* ── SELECT BULAN ── */
+.select-bar{background:#fff;border-bottom:2px solid #e2e8f0;padding:.6rem 1rem;display:flex;align-items:center;gap:.6rem}
+.select-bar label{font-size:.82rem;font-weight:600;color:#4a5568;white-space:nowrap}
+.bulan-select{flex:1;max-width:280px;padding:7px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.88rem;color:#2d3748;background:#fff;cursor:pointer;outline:none;transition:border .15s;font-weight:500}
+.bulan-select:focus{border-color:#1a56db}
+/* ── SALDO AWAL ROW ── */
+tbody tr.row-saldo-awal td{background:#fffbeb;color:#92400e;font-style:italic}
+tbody tr.row-saldo-awal td.col-masuk{background:#fef3c7;color:#92400e}
+tbody tr.row-saldo-awal td.col-saldo{color:#92400e}
 
 /* ── MAIN CONTENT ── */
 .content{padding:1.2rem;max-width:1200px;margin:0 auto}
@@ -114,7 +115,12 @@ tr.row-total td.col-saldo{background:#1557a0;color:#fff}
   <span class="badge-info" id="badge-months">Memuat data...</span>
 </div>
 
-<div class="tab-scroll"><div class="tabs" id="tabs"></div></div>
+<div class="select-bar">
+  <label for="bulan-select">📅 Pilih Bulan:</label>
+  <select class="bulan-select" id="bulan-select" onchange="switchTab(this.value)">
+    <option>Memuat data...</option>
+  </select>
+</div>
 
 <div class="content" id="content">
   <div class="state-box">
@@ -193,6 +199,7 @@ function parseSections(rows) {
     const headers = rows[hIdx];
     const dataRows = [];
     let totalRow = null;
+    let perBulanRow = null;
 
     for (let i = hIdx+1; i < nextBi; i++) {
       const r = rows[i];
@@ -205,10 +212,14 @@ function parseSections(rows) {
       // Grand total row: col0 empty, col5 starts with "Rp"
       if (!col0 && col5.startsWith('Rp')) { totalRow = r; continue; }
 
-      // Per-bulan/pemasukan row — skip it (just for summary cards we use totalRow)
-      if (!col0 && (col4.includes('Total per bulan') || col4.includes('Pemasukan dan pengeluaran'))) continue;
-      // Some months have no label — row like ",,,,,610.000,445.480,,,"
-      if (!col0 && !col4 && col5 && /^\d/.test(col5)) continue;
+      // Per-bulan row — TANGKAP, jangan skip
+      if (!col0 && (col4.includes('Total per bulan') || col4.includes('Pemasukan dan pengeluaran'))) {
+        perBulanRow = r; continue;
+      }
+      // Beberapa bulan tidak punya label di col4, tapi col5 angka langsung
+      if (!col0 && !col4 && col5 && /^\d/.test(col5.replace(/[.\s]/g,''))) {
+        perBulanRow = r; continue;
+      }
 
       // Skip rows with number-only in col0 but no other data
       if (col0 && !isNaN(col0.replace('.','')) && r.slice(1).every(c => !c || !c.trim())) continue;
@@ -219,7 +230,7 @@ function parseSections(rows) {
       dataRows.push(r);
     }
 
-    result.push({ label, headers, dataRows, totalRow });
+    result.push({ label, headers, dataRows, totalRow, perBulanRow });
   }
 
   return result;
@@ -249,21 +260,20 @@ function numStr(n) {
 }
 
 // ============================================================
-// RENDER TABS
+// RENDER SELECT
 // ============================================================
-function renderTabs() {
-  const tabs = document.getElementById('tabs');
-  tabs.innerHTML = sections.map((s, i) =>
-    `<button class="tab-btn${i===activeIdx?' active':''}" onclick="switchTab(${i})">${s.label.replace('Bulan ','')}</button>`
+function renderSelect() {
+  const sel = document.getElementById('bulan-select');
+  sel.innerHTML = sections.map((s, i) =>
+    `<option value="${i}"${i===activeIdx?' selected':''}>${s.label}</option>`
   ).join('');
   document.getElementById('badge-months').textContent = sections.length + ' bulan data';
 }
 
 function switchTab(i) {
-  activeIdx = i;
+  activeIdx = parseInt(i);
   searchQuery = "";
-  renderTabs();
-  renderSection(i);
+  renderSection(activeIdx);
 }
 
 // ============================================================
@@ -279,17 +289,23 @@ function renderSection(idx) {
     ? sec.dataRows.filter(r => r.some(c => (c||'').toLowerCase().includes(q)))
     : sec.dataRows;
 
-  // Summary from totalRow or compute from data
+  // Summary: gunakan perBulanRow untuk masuk/keluar (tanpa saldo awal bawaan)
+  // Gunakan totalRow[7] untuk saldo akhir (paling akurat)
   let masukTotal = 0, keluarTotal = 0, saldoFinal = 0;
-  if (sec.totalRow) {
-    masukTotal = parseNum(sec.totalRow[5]);
-    keluarTotal = parseNum(sec.totalRow[6]);
-    saldoFinal = parseNum(sec.totalRow[7]);
-  } else {
-    filtered.forEach(r => {
+  if (sec.perBulanRow) {
+    masukTotal = parseNum(sec.perBulanRow[5]);
+    keluarTotal = parseNum(sec.perBulanRow[6]);
+  } else if (sec.totalRow) {
+    // fallback: hitung manual dari data (skip baris saldo awal = baris pertama)
+    sec.dataRows.slice(1).forEach(r => {
       masukTotal += parseNum(r[5]);
       keluarTotal += parseNum(r[6]);
     });
+  }
+  // Saldo akhir dari totalRow col[7]
+  if (sec.totalRow) {
+    saldoFinal = parseNum(sec.totalRow[7]);
+  } else {
     const lastRow = sec.dataRows[sec.dataRows.length-1];
     if (lastRow) saldoFinal = parseNum(lastRow[7]);
   }
@@ -303,15 +319,19 @@ function renderSection(idx) {
     const keluar = (r[IDX.keluar]||'').trim();
     const saldo = (r[IDX.saldo]||'').trim();
     const metode = (r[IDX.metode]||'').trim().toLowerCase();
+    const transaksi = (r[IDX.transaksi]||'').trim();
     const isKeluar = !masuk && keluar;
+    // Baris saldo awal: no=1 dan transaksi mengandung kata "Saldo"
+    const isSaldoAwal = r[IDX.no]==='1' && /saldo/i.test(transaksi);
     const metodeClass = metode==='tranfer'?'tranfer': metode==='tunai'?'tunai':'other';
+    const rowClass = isSaldoAwal ? 'row-saldo-awal' : isKeluar ? 'row-keluar' : '';
 
-    return `<tr class="${isKeluar?'row-keluar':''}">
+    return `<tr class="${rowClass}">
       <td>${r[IDX.no]||''}</td>
       <td style="white-space:nowrap;font-size:.78rem">${r[IDX.tgl]||''}</td>
-      <td style="font-weight:500">${r[IDX.nama]||''}</td>
+      <td style="font-weight:500">${r[IDX.nama]||''}${isSaldoAwal?' <span style="font-size:.7rem;background:#fde68a;color:#92400e;padding:1px 5px;border-radius:4px;font-style:normal">saldo awal</span>':''}</td>
       <td style="text-align:center;font-size:.78rem">${r[IDX.norumah]||''}</td>
-      <td>${r[IDX.transaksi]||''}</td>
+      <td>${transaksi}</td>
       <td class="col-masuk">${masuk?fmtRp(masuk):''}</td>
       <td class="col-keluar">${keluar?fmtRp(keluar):''}</td>
       <td class="col-saldo">${saldo?fmtRp(saldo):''}</td>
@@ -410,7 +430,7 @@ function exportSection() {
 async function loadData() {
   document.getElementById('content').innerHTML =
     `<div class="state-box"><div class="spinner"></div><p>Memuat data dari Google Sheet...</p></div>`;
-  document.getElementById('tabs').innerHTML = '';
+  document.getElementById('bulan-select').innerHTML = '<option>Memuat...</option>';
   document.getElementById('badge-months').textContent = 'Memuat...';
 
   try {
@@ -423,14 +443,8 @@ async function loadData() {
     if (!sections.length) throw new Error('Tidak ada data bulan yang ditemukan. Pastikan format CSV sesuai.');
 
     activeIdx = sections.length - 1; // tampilkan bulan terakhir dulu
-    renderTabs();
+    renderSelect();
     renderSection(activeIdx);
-
-    // Scroll tab aktif ke tengah
-    setTimeout(() => {
-      const active = document.querySelector('.tab-btn.active');
-      if (active) active.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
-    }, 100);
 
   } catch(e) {
     document.getElementById('content').innerHTML =
