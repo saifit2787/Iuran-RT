@@ -80,13 +80,13 @@
         .section-header h3 { font-size: 1rem; color: var(--primary-dark); }
         .section-header .section-stats { font-size: 0.8rem; color: var(--gray-600); }
 
-        .iuran-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-        .iuran-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+        .iuran-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .iuran-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto; }
         .iuran-card-header { background: var(--primary); color: white; padding: 0.75rem 1rem; font-weight: 700; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
         .iuran-card-header .warga-count { background: rgba(255,255,255,0.2); padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.75rem; }
-        .iuran-card table { margin: 0; }
-        .iuran-card thead th { font-size: 0.75rem; padding: 0.5rem; }
-        .iuran-card tbody td { font-size: 0.8rem; padding: 0.375rem 0.5rem; }
+        .iuran-card table { margin: 0; min-width: 720px; }
+        .iuran-card thead th { font-size: 0.85rem; padding: 0.625rem 0.75rem; }
+        .iuran-card tbody td { font-size: 0.9rem; padding: 0.55rem 0.75rem; }
         .iuran-card-footer { background: var(--gray-50); padding: 0.625rem 1rem; border-top: 2px solid var(--gray-200); display: flex; justify-content: space-between; font-weight: 700; font-size: 0.875rem; }
         .iuran-card-footer .total-label { color: var(--gray-500); }
         .iuran-card-footer .total-value { color: var(--success); }
@@ -138,6 +138,13 @@
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
         .modal-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end; gap: 0.5rem; }
+        .bukti { max-width: 420px; margin: 0 auto; padding: 1rem; border: 1px solid var(--gray-200); border-radius: var(--radius); background: white; }
+        .bukti h2 { text-align: center; font-size: 1.05rem; margin-bottom: 0.35rem; }
+        .bukti table { margin-top: 1rem; font-size: 0.9rem; }
+        .bukti td { padding: 0.35rem 0.25rem; border-bottom: none; }
+        .bukti .label { width: 110px; font-weight: 700; color: var(--gray-600); }
+        .bukti .footer { margin-top: 1rem; padding: 0.75rem 0 0; border-top: 1px solid var(--gray-200); color: var(--gray-700); font-size: 0.85rem; }
+        .bukti .nobukti { margin-top: 0.5rem; font-weight: 700; color: var(--primary); text-align: center; }
 
         .loading { text-align: center; padding: 3rem; color: var(--gray-400); }
         .loading .spinner { width: 2rem; height: 2rem; border: 3px solid var(--gray-200); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 0.75rem; }
@@ -206,7 +213,10 @@
         <!-- IURAN VIEW -->
         <div id="viewIuran" style="display:none">
             <div class="summary-cards" id="iuranSummaryCards"></div>
-            <input type="text" class="search-input" id="iuranSearch" placeholder="Cari nama warga..." oninput="filterRows('.iuran-entry-row')" style="max-width:300px;margin-bottom:1rem" />
+            <div class="toolbar">
+                <input type="text" class="search-input" id="iuranSearch" placeholder="Cari nama warga..." oninput="filterRows('.iuran-entry-row')" />
+                <select id="iuranMonthSelect" onchange="onIuranMonthChange()" style="min-width:220px; display:none;"></select>
+            </div>
             <div class="iuran-grid" id="iuranGrid"><div class="loading"><div class="spinner"></div><p>Memuat data iuran...</p></div></div>
         </div>
 
@@ -326,12 +336,24 @@
         </div>
     </div>
 
+    <!-- MODAL: BUKTI PEMBAYARAN -->
+    <div class="modal-overlay" id="buktiModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Bukti Pembayaran</h3><button class="modal-close" onclick="closeBuktiModal()">&times;</button></div>
+            <div class="modal-body" id="buktiContent"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBuktiModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         var API_URL = localStorage.getItem('iuranrt_api_url') || '';
         var currentData = null;
         var sheetsInfo = [];
         var wargaData = [];
         var selectedJurnalSection = -1;
+        var selectedIuranMonth = -1;
         var isAuthenticated = false;
         var AUTH_STORAGE_KEY = 'iuranrt_logged_in';
         var AUTH_PASSWORD_KEY = 'iuranrt_login_password';
@@ -495,6 +517,8 @@
             if (!val || val === '' || val === 'undefined') {
                 hideAllViews(); return;
             }
+            selectedJurnalSection = -1;
+            selectedIuranMonth = -1;
             loadData(val);
         }
 
@@ -546,7 +570,7 @@
                 opt.textContent = sec.bulan || sec.header || 'Bulan ' + (idx + 1);
                 select.appendChild(opt);
             });
-            if (selectedJurnalSection < 0 || selectedJurnalSection >= sections.length) selectedJurnalSection = 0;
+            if (selectedJurnalSection < 0 || selectedJurnalSection >= sections.length) selectedJurnalSection = getCurrentMonthDefaultIndex(sections, function (sec) { return sec.bulan || sec.header; });
             select.value = selectedJurnalSection;
         }
 
@@ -555,6 +579,33 @@
             if (!select) return;
             selectedJurnalSection = parseInt(select.value, 10);
             renderJurnalView(currentData);
+        }
+
+        function setupIuranMonthSelect(months) {
+            var select = document.getElementById('iuranMonthSelect');
+            if (!select) return;
+            if (!months || months.length <= 1) {
+                select.style.display = 'none';
+                selectedIuranMonth = -1;
+                return;
+            }
+            select.style.display = 'inline-flex';
+            select.innerHTML = '';
+            months.forEach(function (month, idx) {
+                var opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = month.title || 'Bulan ' + (idx + 1);
+                select.appendChild(opt);
+            });
+            if (selectedIuranMonth < 0 || selectedIuranMonth >= months.length) selectedIuranMonth = getCurrentMonthDefaultIndex(months, function (month) { return month.title; });
+            select.value = selectedIuranMonth;
+        }
+
+        function onIuranMonthChange() {
+            var select = document.getElementById('iuranMonthSelect');
+            if (!select) return;
+            selectedIuranMonth = parseInt(select.value, 10);
+            renderIuranView(currentData);
         }
 
         // ==================== JURNAL ====================
@@ -594,6 +645,7 @@
                         '<td class="text-center">' + ((t.isSaldoAwal || !isAuthenticated) ? '-' :
                             '<div class="action-buttons">' +
                             '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + si + ',' + t.rowIndex + ')">Edit</button>' +
+                            '<button class="btn btn-success btn-sm" onclick="openBuktiModal(' + t.rowIndex + ')">Bukti</button>' +
                             '<button class="btn btn-danger btn-sm" onclick="confirmDelete(' + t.rowIndex + ')">Hapus</button>' +
                             '</div>') + '</td></tr>';
                 });
@@ -617,14 +669,19 @@
                 document.getElementById('iuranGrid').innerHTML = '<div class="empty-state">Tidak ada data iuran</div>';
                 document.getElementById('iuranSummaryCards').innerHTML = ''; return;
             }
+            setupIuranMonthSelect(data.months);
+            var monthsToRender = data.months;
+            if (selectedIuranMonth >= 0 && selectedIuranMonth < data.months.length) {
+                monthsToRender = [data.months[selectedIuranMonth]];
+            }
             var totalU = 0;
-            data.months.forEach(function (m) { totalU += m.total; });
+            monthsToRender.forEach(function (m) { totalU += m.total; });
             document.getElementById('iuranSummaryCards').innerHTML =
-                '<div class="card"><div class="card-label">Total Bulan</div><div class="card-value" style="color:var(--primary)">' + data.months.length + '</div></div>' +
+                '<div class="card"><div class="card-label">Bulan Ditampilkan</div><div class="card-value" style="color:var(--primary)">' + monthsToRender.length + '</div></div>' +
                 '<div class="card"><div class="card-label">Total Iuran</div><div class="card-value" style="color:var(--success)">Rp ' + fmt(totalU) + '</div></div>' +
                 '<div class="card"><div class="card-label">Sheet</div><div class="card-value" style="color:var(--gray-700);font-size:0.95rem">' + esc(data.sheetName) + '</div></div>';
             var html = '';
-            data.months.forEach(function (m) {
+            monthsToRender.forEach(function (m) {
                 html += '<div class="iuran-card iuran-month-card"><div class="iuran-card-header"><span>' + esc(m.title) + '</span><span class="warga-count">' + m.jumlahWarga + ' warga</span></div>' +
                     '<table><thead><tr><th>No</th><th>Tanggal</th><th>Nama</th><th>No.Rumah</th><th class="text-right">Nominal</th></tr></thead><tbody>';
                 m.entries.forEach(function (e) {
@@ -763,6 +820,45 @@
         function openNewMonthModal() { document.getElementById('newMonthModal').classList.add('active'); }
         function closeNewMonthModal() { document.getElementById('newMonthModal').classList.remove('active'); }
 
+        function findJurnalTransaction(rowIdx) {
+            if (!currentData || !currentData.sections) return null;
+            for (var s = 0; s < currentData.sections.length; s++) {
+                var txs = currentData.sections[s].transactions || [];
+                for (var i = 0; i < txs.length; i++) {
+                    if (txs[i].rowIndex === rowIdx) return txs[i];
+                }
+            }
+            return null;
+        }
+
+        function openBuktiModal(rowIdx) {
+            var t = findJurnalTransaction(rowIdx);
+            if (!t) { showToast('Data transaksi tidak ditemukan', 'error'); return; }
+            var sheetName = document.getElementById('sheetSelect').value || 'Jurnal';
+            var jumlah = t.pemasukan || t.pengeluaran || 0;
+            var nobukti = 'No. Bukti: ' + sheetName.replace(/\s+/g, '-').toUpperCase() + '-' + t.rowIndex;
+            document.getElementById('buktiContent').innerHTML =
+                '<div class="bukti">' +
+                '<h2>Bukti Pembayaran</h2>' +
+                '<h2>RT 08 RW 13 Pilang - Sidodadi</h2>' +
+                '<table>' +
+                '<tr><td class="label">Tanggal</td><td>: ' + esc(t.tanggal) + '</td></tr>' +
+                '<tr><td class="label">Nama</td><td>: ' + esc(t.nama) + '</td></tr>' +
+                '<tr><td class="label">No Rumah</td><td>: ' + esc(t.noRumah) + '</td></tr>' +
+                '<tr><td class="label">Jumlah</td><td>: Rp ' + fmt(jumlah) + '</td></tr>' +
+                '<tr><td class="label">Pembayaran</td><td>: ' + esc(t.metode || '-') + '</td></tr>' +
+                '</table>' +
+                '<div class="footer">' +
+                'Terima kasih atas pembayarannya<br>' +
+                'Jika ada kesalahan hubungi bendahara 0817030065656' +
+                // '<p class="nobukti">' + esc(nobukti) + '</p>' +
+                '</div>' +
+                '</div>';
+            document.getElementById('buktiModal').classList.add('active');
+        }
+
+        function closeBuktiModal() { document.getElementById('buktiModal').classList.remove('active'); }
+
         function openImageModal(rowIdx, colIdx, currentLink) {
             if (!requireAuth('mengubah link kwitansi')) return;
             document.getElementById('imgRowIndex').value = rowIdx;
@@ -845,6 +941,22 @@
         // ==================== UTILS ====================
         function fmt(n) { if (!n && n !== 0) return '0'; return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
         function esc(s) { if (!s) return ''; return s.toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+        function getCurrentMonthDefaultIndex(items, getLabel) {
+            if (!items || !items.length) return -1;
+            var now = new Date();
+            var monthNames = ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember'];
+            var currentMonth = monthNames[now.getMonth()];
+            var currentYear = now.getFullYear().toString();
+            var monthMatch = -1;
+            for (var i = 0; i < items.length; i++) {
+                var label = ((getLabel(items[i]) || '') + '').toLowerCase();
+                if (label.indexOf(currentMonth) >= 0) {
+                    monthMatch = i;
+                    if (label.indexOf(currentYear) >= 0) return i;
+                }
+            }
+            return monthMatch >= 0 ? monthMatch : items.length - 1;
+        }
         function renderBadge(m) { if (!m) return '-'; var c = m.toLowerCase().indexOf('tunai') >= 0 ? 'badge-tunai' : 'badge-transfer'; return '<span class="badge ' + c + '">' + esc(m) + '</span>'; }
         function renderImgLink(link) {
             if (!link) return '';
