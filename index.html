@@ -90,6 +90,12 @@
         .iuran-card-footer { background: var(--gray-50); padding: 0.625rem 1rem; border-top: 2px solid var(--gray-200); display: flex; justify-content: space-between; font-weight: 700; font-size: 0.875rem; }
         .iuran-card-footer .total-label { color: var(--gray-500); }
         .iuran-card-footer .total-value { color: var(--success); }
+        .rumah-result { border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; margin-top: 1rem; }
+        .rumah-result-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 0.5rem; padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--gray-100); align-items: center; font-size: 0.85rem; }
+        .rumah-result-row:last-child { border-bottom: none; }
+        .rumah-result-head { background: var(--gray-100); color: var(--gray-600); font-weight: 700; }
+        .rumah-result-month { font-weight: 700; color: var(--primary); }
+        .rumah-result-paid { color: var(--success); font-weight: 700; text-align: right; }
 
         /* Donasi */
         .donasi-card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 0.75rem; padding: 0.75rem 1rem; display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center; }
@@ -169,6 +175,8 @@
             thead th, tbody td { padding: 0.4rem 0.25rem; }
             .hide-mobile { display: none; }
             .iuran-grid { grid-template-columns: 1fr; }
+            .rumah-result-row { grid-template-columns: 1fr; gap: 0.125rem; }
+            .rumah-result-paid { text-align: left; }
             .donasi-card { grid-template-columns: 1fr; gap: 0.5rem; }
         }
         @media (max-width: 480px) { .summary-cards { grid-template-columns: 1fr; } }
@@ -192,6 +200,7 @@
         <div class="toolbar" style="margin-bottom:0.5rem">
             <select id="sheetSelect" onchange="onSheetChange()"><option value="">Memuat sheet...</option></select>
             <button class="btn btn-secondary" onclick="loadSheets()" style="white-space:nowrap">Refresh</button>
+            <button class="btn btn-success" onclick="openRumahIuranModal()" style="white-space:nowrap">Per Rumah</button>
         </div>
 
         <!-- JURNAL VIEW -->
@@ -343,6 +352,21 @@
             <div class="modal-body" id="buktiContent"></div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeBuktiModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CEK IURAN PER RUMAH -->
+    <div class="modal-overlay" id="rumahIuranModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Cek Iuran Per Rumah</h3><button class="modal-close" onclick="closeRumahIuranModal()">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label>No Rumah</label><input type="text" id="rumahIuranInput" placeholder="Contoh: K1, H4" /></div>
+                <div id="rumahIuranResult"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeRumahIuranModal()">Tutup</button>
+                <button class="btn btn-primary" onclick="cariIuranPerRumah()">Cari</button>
             </div>
         </div>
     </div>
@@ -859,6 +883,67 @@
 
         function closeBuktiModal() { document.getElementById('buktiModal').classList.remove('active'); }
 
+        function normalizeRumah(value) {
+            return (value || '').toString().trim().toLowerCase().replace(/\s+/g, '');
+        }
+
+        function openRumahIuranModal() {
+            document.getElementById('rumahIuranInput').value = '';
+            document.getElementById('rumahIuranResult').innerHTML = '';
+            document.getElementById('rumahIuranModal').classList.add('active');
+            setTimeout(function () { document.getElementById('rumahIuranInput').focus(); }, 50);
+        }
+
+        function closeRumahIuranModal() {
+            document.getElementById('rumahIuranModal').classList.remove('active');
+        }
+
+        function cariIuranPerRumah() {
+            var noRumah = document.getElementById('rumahIuranInput').value.trim();
+            var result = document.getElementById('rumahIuranResult');
+            if (!noRumah) {
+                result.innerHTML = '<div class="empty-state" style="padding:1rem">Masukkan No Rumah terlebih dahulu</div>';
+                return;
+            }
+            if (!currentData || currentData.type !== 'iuran' || !currentData.months) {
+                result.innerHTML = '<div class="empty-state" style="padding:1rem">Pilih sheet Iuran RT terlebih dahulu</div>';
+                return;
+            }
+
+            var key = normalizeRumah(noRumah);
+            var paid = [];
+            currentData.months.forEach(function (month) {
+                (month.entries || []).forEach(function (entry) {
+                    if (normalizeRumah(entry.noRumah) === key) {
+                        paid.push({
+                            bulan: month.title,
+                            tanggal: entry.tanggal,
+                            nama: entry.nama,
+                            nominal: entry.nominal
+                        });
+                    }
+                });
+            });
+
+            if (!paid.length) {
+                result.innerHTML = '<div class="empty-state" style="padding:1rem">Belum ada data iuran untuk rumah ' + esc(noRumah) + '</div>';
+                return;
+            }
+
+            var html = '<div style="font-weight:700;margin-top:0.5rem">Rumah ' + esc(noRumah) + ' sudah bayar ' + paid.length + ' bulan</div>' +
+                '<div class="rumah-result">' +
+                '<div class="rumah-result-row rumah-result-head"><span>Bulan</span><span>Tanggal / Nama</span><span>Nominal</span></div>';
+            paid.forEach(function (item) {
+                html += '<div class="rumah-result-row">' +
+                    '<span class="rumah-result-month">' + esc(item.bulan) + '</span>' +
+                    '<span>' + esc(item.tanggal || '-') + '<br><span style="color:var(--gray-500)">' + esc(item.nama || '-') + '</span></span>' +
+                    '<span class="rumah-result-paid">Rp ' + fmt(item.nominal) + '</span>' +
+                    '</div>';
+            });
+            html += '</div>';
+            result.innerHTML = html;
+        }
+
         function openImageModal(rowIdx, colIdx, currentLink) {
             if (!requireAuth('mengubah link kwitansi')) return;
             document.getElementById('imgRowIndex').value = rowIdx;
@@ -936,6 +1021,9 @@
             for (var i = 0; i < wargaData.length; i++) {
                 if (wargaData[i].nama === nama) { document.getElementById('formNoRumah').value = wargaData[i].noRumah; break; }
             }
+        });
+        document.getElementById('rumahIuranInput').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') cariIuranPerRumah();
         });
 
         // ==================== UTILS ====================
