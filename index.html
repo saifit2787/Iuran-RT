@@ -124,6 +124,8 @@
 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: flex-start; padding: 2rem 1rem; overflow-y: auto; }
         .modal-overlay.active { display: flex; }
+        .admin-only { display: none !important; }
+        body.logged-in .admin-only { display: inline-flex !important; }
         .modal { background: white; border-radius: var(--radius); box-shadow: var(--shadow-md); width: 100%; max-width: 500px; animation: slideDown 0.2s ease; }
         @keyframes slideDown { from { transform: translateY(-20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .modal-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--gray-200); display: flex; justify-content: space-between; align-items: center; }
@@ -169,13 +171,14 @@
     <div class="header">
         <h1>Pembukuan Iuran RT 08 RW 13</h1>
         <p>LPR Pilang - Sidodadi <span id="versionInfo" style="font-size:0.75rem; opacity:0.8; margin-left:10px;"></span></p>
+        <div id="authStatus" style="margin-top:0.75rem; font-size:0.9rem; opacity:0.9; display:flex; gap:0.5rem; justify-content:center; flex-wrap:wrap;"></div>
     </div>
     <div class="toast-container" id="toastContainer"></div>
     <div class="container">
         <div class="setup-banner" id="setupBanner">
             <h3>Pengaturan Awal</h3>
             <p style="font-size:0.8rem;margin-bottom:0.5rem;color:var(--gray-600)">Masukkan URL Google Apps Script Web App:</p>
-            <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec" value="https://script.google.com/macros/s/AKfycbxS_hUvlv6__xVHPvGgCGdjxo2VvOPO6YlcpKHmKl_k8l9Xa__6j8j4ka4TUp5WxZzm/exec"/>
+            <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec" value="https://script.google.com/macros/s/AKfycbxS_hUvlv6__xVHPvGgCGdjxo2VvOPO6YlcpKHmKl_k8l9Xa__6j8j4ka4TUp5WxZzm/exec" />
             <button class="btn-save-url" onclick="saveApiUrl()">Simpan URL</button>
         </div>
 
@@ -194,7 +197,8 @@
             </div>
             <div class="toolbar">
                 <input type="text" class="search-input" id="searchInput" placeholder="Cari nama/transaksi..." oninput="filterRows('.jurnal-row')" />
-                <button class="btn btn-primary" onclick="openAddModal()">+ Tambah Transaksi</button>
+                <select id="jurnalMonthSelect" onchange="onJurnalSectionChange()" style="min-width:220px; display:none;"></select>
+                <button id="addTransactionBtn" class="btn btn-primary admin-only" onclick="openAddModal()">+ Tambah Transaksi</button>
             </div>
             <div id="jurnalContent"><div class="loading"><div class="spinner"></div><p>Memuat data...</p></div></div>
         </div>
@@ -261,13 +265,40 @@
         </div>
     </div>
 
+    <!-- MODAL: LOGIN -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal">
+            <div class="modal-header"><h3>Login Admin</h3><button class="modal-close" onclick="closeLoginModal()">&times;</button></div>
+            <div class="modal-body">
+                <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Masukkan password admin" /></div>
+                <!-- <p style="font-size:0.8rem;color:var(--gray-500);">Gunakan password default <strong>admin</strong> jika belum diubah.</p> -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeLoginModal()">Batal</button>
+                <button class="btn btn-primary" onclick="login()">Masuk</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: TAMBAH BULAN BARU -->
     <div class="modal-overlay" id="newMonthModal">
         <div class="modal">
             <div class="modal-header"><h3>Tambah Bulan Baru</h3><button class="modal-close" onclick="closeNewMonthModal()">&times;</button></div>
             <div class="modal-body">
                 <div class="form-row">
-                    <div class="form-group"><label>Bulan</label><select id="newMonthBulan"><option>Januari</option><option>Februari</option><option>Maret</option><option>April</option><option>Mei</option><option>Juni</option><option>Juli</option><option>Agustus</option><option>September</option><option>Oktober</option><option>November</option><option>Desember</option></select></div>
+                    <div class="form-group"><label>Bulan</label><select id="newMonthBulan">
+                        <option>Januari</option>
+                        <option>Februari</option>
+                        <option>Maret</option>
+                        <option>April</option>
+                        <option>Mei</option>
+                        <option>Juni</option>
+                        <option>Juli</option>
+                        <option>Agustus</option>
+                        <option>September</option>
+                        <option>Oktober</option>
+                        <option>November</option>
+                        <option>Desember</option></select></div>
                     <div class="form-group"><label>Tahun</label><input type="number" id="newMonthTahun" value="2026" min="2024" max="2030" /></div>
                 </div>
             </div>
@@ -300,9 +331,15 @@
         var currentData = null;
         var sheetsInfo = [];
         var wargaData = [];
+        var selectedJurnalSection = -1;
+        var isAuthenticated = false;
+        var AUTH_STORAGE_KEY = 'iuranrt_logged_in';
+        var AUTH_PASSWORD_KEY = 'iuranrt_login_password';
+        var AUTH_DEFAULT_PASSWORD = 'saifit2787';
 
-            document.addEventListener('DOMContentLoaded', function () {
-                if (!API_URL) {
+        document.addEventListener('DOMContentLoaded', function () {
+                checkAuth();
+            if (!API_URL) {
                     document.getElementById('setupBanner').style.display = 'block';
                     document.getElementById('viewLoading').style.display = 'none';
                 } else { 
@@ -321,6 +358,74 @@
             document.getElementById('setupBanner').style.display = 'none';
             showToast('URL berhasil disimpan!', 'success');
             loadSheets();
+        }
+
+        function checkAuth() {
+            isAuthenticated = localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
+            updateAuthUI();
+            return isAuthenticated;
+        }
+
+        function updateAuthUI() {
+            document.body.classList.toggle('logged-in', isAuthenticated);
+            var authSection = document.getElementById('authStatus');
+            if (!authSection) return;
+            if (isAuthenticated) {
+                authSection.innerHTML = '<span>Masuk sebagai admin</span><button class="btn btn-secondary btn-sm" onclick="logout()">Logout</button>';
+            } else {
+                authSection.innerHTML = '<span>Login untuk aktifkan fitur tambah/edit/hapus</span><button class="btn btn-primary btn-sm" onclick="openLoginModal()">Login</button>';
+            }
+            var addBtn = document.getElementById('addTransactionBtn');
+            if (addBtn) addBtn.style.display = isAuthenticated ? 'inline-flex' : 'none';
+        }
+
+        function isAuthValid(password) {
+            var saved = localStorage.getItem(AUTH_PASSWORD_KEY);
+            if (saved) return password === saved;
+            return password === AUTH_DEFAULT_PASSWORD;
+        }
+
+        function openLoginModal() {
+            document.getElementById('loginModal').classList.add('active');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+            var input = document.getElementById('loginPassword');
+            if (input) input.value = '';
+        }
+
+        function login() {
+            var password = document.getElementById('loginPassword').value || '';
+            if (!password) { showToast('Masukkan password', 'error'); return; }
+            if (isAuthValid(password)) {
+                localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+                isAuthenticated = true;
+                closeLoginModal();
+                updateAuthUI();
+                refreshCurrentView();
+                showToast('Berhasil login', 'success');
+                return;
+            }
+            showToast('Password salah', 'error');
+        }
+
+        function logout() {
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            isAuthenticated = false;
+            updateAuthUI();
+            refreshCurrentView();
+            showToast('Logout berhasil', 'info');
+        }
+
+        function refreshCurrentView() {
+            var sel = document.getElementById('sheetSelect');
+            if (sel && sel.value) loadData(sel.value);
+        }
+
+        function requireAuth(action) {
+            if (!checkAuth()) { showToast('Harap login untuk ' + action, 'error'); return false; }
+            return true;
         }
 
         // function apiGet(action, params) {
@@ -422,6 +527,36 @@
             });
         }
 
+        function setupJurnalMonthSelect(sections) {
+            var select = document.getElementById('jurnalMonthSelect');
+            if (!select) return;
+            if (!sections || sections.length <= 1) {
+                select.style.display = 'none';
+                selectedJurnalSection = -1;
+                return;
+            }
+            select.style.display = 'inline-flex';
+            select.innerHTML = '';
+            sections.forEach(function (sec, idx) {
+                // var opt = document.createElement('option');
+                var opt = document.createElement('option');
+                console.log('Adding month option:', sec);
+
+                opt.value = idx;
+                opt.textContent = sec.bulan || sec.header || 'Bulan ' + (idx + 1);
+                select.appendChild(opt);
+            });
+            if (selectedJurnalSection < 0 || selectedJurnalSection >= sections.length) selectedJurnalSection = 0;
+            select.value = selectedJurnalSection;
+        }
+
+        function onJurnalSectionChange() {
+            var select = document.getElementById('jurnalMonthSelect');
+            if (!select) return;
+            selectedJurnalSection = parseInt(select.value, 10);
+            renderJurnalView(currentData);
+        }
+
         // ==================== JURNAL ====================
         function renderJurnalView(data) {
             document.getElementById('viewJurnal').style.display = 'block';
@@ -430,8 +565,13 @@
                 c.innerHTML = '<div class="empty-state">Tidak ada data transaksi</div>';
                 setCards(0, 0, 0, 0); return;
             }
+            setupJurnalMonthSelect(data.sections);
+            var sectionsToRender = data.sections;
+            if (selectedJurnalSection >= 0 && selectedJurnalSection < data.sections.length) {
+                sectionsToRender = [data.sections[selectedJurnalSection]];
+            }
             var html = '', gP = 0, gE = 0, gS = 0, gT = 0;
-            data.sections.forEach(function (sec, si) {
+            sectionsToRender.forEach(function (sec, si) {
                 gP += sec.totalPemasukan; gE += sec.totalPengeluaran; gS = sec.saldo; gT += sec.transactions.length;
                 if (data.sections.length > 1) {
                     html += '<div class="section-header"><h3>' + esc(sec.bulan || sec.header) + '</h3>' +
@@ -451,7 +591,7 @@
                         '<td class="text-right"><span class="amount-saldo">Rp ' + fmt(t.saldo) + '</span></td>' +
                         '<td class="hide-mobile">' + renderBadge(t.metode) + '</td>' +
                         '<td class="hide-mobile">' + esc(t.keterangan) + renderImgLink(t.linkGambar) + '</td>' +
-                        '<td class="text-center">' + (t.isSaldoAwal ? '-' :
+                        '<td class="text-center">' + ((t.isSaldoAwal || !isAuthenticated) ? '-' :
                             '<div class="action-buttons">' +
                             '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + si + ',' + t.rowIndex + ')">Edit</button>' +
                             '<button class="btn btn-danger btn-sm" onclick="confirmDelete(' + t.rowIndex + ')">Hapus</button>' +
@@ -524,7 +664,7 @@
             data.tables.forEach(function (tbl) {
                 html += '<div class="rekap-section"><div class="rekap-title">' + esc(tbl.title) + '</div>' +
                     '<div class="table-container" style="border-radius:0 0 var(--radius) var(--radius)"><table><thead><tr>' +
-                    '<th>No</th><th>Tanggal</th><th>Transaksi</th><th class="text-right">Pemasukan</th><th class="text-right">Pengeluaran</th><th class="text-right">Saldo</th><th class="hide-mobile">Keterangan</th><th class="hide-mobile">Bukti</th></tr></thead><tbody>';
+                    '<th>No</th><th>Tanggal</th><th>Transaksi</th><th class="text-right">Pemasukan</th><th class="text-right">Pengeluaran</th><th class="text-right">Saldo</th><th class="hide-mobile">Keterangan</th></thead><tbody>';
                 tbl.rows.forEach(function (r) {
                     html += '<tr class="rekap-row">' +
                         '<td>' + (r.no || '') + '</td><td style="white-space:nowrap">' + esc(r.tanggal) + '</td><td>' + esc(r.transaksi) + '</td>' +
@@ -568,7 +708,7 @@
                     '<div class="kwintansi-tanggal">' + esc(e.tanggal) + '</div>' +
                     (e.subInfo ? '<div class="kwintansi-sub">' + esc(e.subInfo) + '</div>' : '') +
                     (e.linkGambar ? '<div class="kwintansi-image"><a href="' + esc(e.linkGambar) + '" target="_blank">Lihat Bukti / Gambar</a></div>' : '') +
-                    '<div style="margin-top:0.5rem"><button class="btn btn-sm btn-purple" onclick="openImageModal(' + e.rowIndex + ',5,\'' + esc(e.linkGambar) + '\')">' + (e.linkGambar ? 'Ubah Link Gambar' : '+ Tambah Gambar') + '</button></div>' +
+                    '<div style="margin-top:0.5rem"><button class="btn btn-sm btn-purple admin-only" onclick="openImageModal(' + e.rowIndex + ',5,\'' + esc(e.linkGambar) + '\')">' + (e.linkGambar ? 'Ubah Link Gambar' : '+ Tambah Gambar') + '</button></div>' +
                     '</div></div>';
             });
             document.getElementById('kwintansiContent').innerHTML = html;
@@ -591,6 +731,7 @@
 
         // ==================== MODALS ====================
         function openAddModal() {
+            if (!requireAuth('menambahkan transaksi')) return;
             document.getElementById('modalTitle').textContent = 'Tambah Transaksi';
             document.getElementById('editRowIndex').value = '';
             document.getElementById('formTanggal').value = new Date().toISOString().split('T')[0];
@@ -600,6 +741,7 @@
         }
 
         function openEditModal(si, rowIdx) {
+            if (!requireAuth('mengedit transaksi')) return;
             if (!currentData || !currentData.sections) return;
             var sec = currentData.sections[si]; if (!sec) return;
             var t = sec.transactions.find(function (tr) { return tr.rowIndex === rowIdx; }); if (!t) return;
@@ -622,6 +764,7 @@
         function closeNewMonthModal() { document.getElementById('newMonthModal').classList.remove('active'); }
 
         function openImageModal(rowIdx, colIdx, currentLink) {
+            if (!requireAuth('mengubah link kwitansi')) return;
             document.getElementById('imgRowIndex').value = rowIdx;
             document.getElementById('imgColIndex').value = colIdx || 5;
             document.getElementById('imgLinkInput').value = currentLink || '';
@@ -631,6 +774,7 @@
 
         // ==================== SAVE ====================
         function saveTransaction() {
+            if (!requireAuth('menyimpan transaksi')) return;
             var sheetName = document.getElementById('sheetSelect').value;
             var rowIdx = document.getElementById('editRowIndex').value;
             var d = {
@@ -659,6 +803,7 @@
         }
 
         function confirmDelete(rowIdx) {
+            if (!requireAuth('menghapus transaksi')) return;
             if (!confirm('Yakin ingin menghapus transaksi ini?')) return;
             var sheetName = document.getElementById('sheetSelect').value;
             apiPost({ action: 'deleteTransaction', sheet: sheetName, rowIndex: rowIdx }).then(function (r) {
@@ -678,6 +823,7 @@
         }
 
         function saveImageLink() {
+            if (!requireAuth('menyimpan link gambar')) return;
             var sheetName = document.getElementById('sheetSelect').value;
             var rowIdx = parseInt(document.getElementById('imgRowIndex').value);
             var colIdx = parseInt(document.getElementById('imgColIndex').value) || 5;
