@@ -200,7 +200,7 @@
         <div class="toolbar" style="margin-bottom:0.5rem">
             <select id="sheetSelect" onchange="onSheetChange()"><option value="">Memuat sheet...</option></select>
             <button class="btn btn-secondary" onclick="loadSheets()" style="white-space:nowrap">Refresh</button>
-            <button class="btn btn-success" onclick="openRumahIuranModal()" style="white-space:nowrap">Per Rumah</button>
+            <button id="perRumahBtn" class="btn btn-success" onclick="openRumahIuranModal()" style="white-space:nowrap;display:none">Cek Iuran</button>
         </div>
 
         <!-- JURNAL VIEW -->
@@ -495,6 +495,14 @@
             ['viewJurnal','viewIuran','viewDonasi','viewRekap','viewKwintansi','viewLoading'].forEach(function(id) {
                 document.getElementById(id).style.display = 'none';
             });
+            updatePerRumahButton(null);
+        }
+
+        function updatePerRumahButton(data) {
+            var btn = document.getElementById('perRumahBtn');
+            if (!btn) return;
+            var show = data && data.type === 'iuran' && !data.hideNoRumah;
+            btn.style.display = show ? 'inline-flex' : 'none';
         }
 
         function loadSheets() {
@@ -554,6 +562,7 @@
                 hideAllViews();
                 if (r.error) { showToast(r.error, 'error'); return; }
                 currentData = r;
+                updatePerRumahButton(r);
                 switch (r.type) {
                     case 'iuran': renderIuranView(r); break;
                     case 'donasi': renderDonasiView(r); break;
@@ -705,11 +714,13 @@
                 '<div class="card"><div class="card-label">Total Iuran</div><div class="card-value" style="color:var(--success)">Rp ' + fmt(totalU) + '</div></div>' +
                 '<div class="card"><div class="card-label">Sheet</div><div class="card-value" style="color:var(--gray-700);font-size:0.95rem">' + esc(data.sheetName) + '</div></div>';
             var html = '';
+            var noRumahHeader = data.hideNoRumah ? '' : '<th>No.Rumah</th>';
             monthsToRender.forEach(function (m) {
                 html += '<div class="iuran-card iuran-month-card"><div class="iuran-card-header"><span>' + esc(m.title) + '</span><span class="warga-count">' + m.jumlahWarga + ' warga</span></div>' +
-                    '<table><thead><tr><th>No</th><th>Tanggal</th><th>Nama</th><th>No.Rumah</th><th class="text-right">Nominal</th></tr></thead><tbody>';
+                    '<table><thead><tr><th>No</th><th>Tanggal</th><th>Nama</th>' + noRumahHeader + '<th class="text-right">Nominal</th></tr></thead><tbody>';
                 m.entries.forEach(function (e) {
-                    html += '<tr class="iuran-entry-row"><td>' + e.no + '</td><td style="white-space:nowrap;font-size:0.75rem">' + esc(e.tanggal) + '</td><td>' + esc(e.nama) + '</td><td>' + esc(e.noRumah) + '</td><td class="text-right amount-in">Rp ' + fmt(e.nominal) + '</td></tr>';
+                    var noRumahCell = data.hideNoRumah ? '' : '<td>' + esc(e.noRumah) + '</td>';
+                    html += '<tr class="iuran-entry-row"><td>' + e.no + '</td><td style="white-space:nowrap;font-size:0.75rem">' + esc(e.tanggal) + '</td><td>' + esc(e.nama) + '</td>' + noRumahCell + '<td class="text-right amount-in">Rp ' + fmt(e.nominal) + '</td></tr>';
                 });
                 html += '</tbody></table><div class="iuran-card-footer"><span class="total-label">Total</span><span class="total-value">Rp ' + fmt(m.total) + '</span></div></div>';
             });
@@ -743,9 +754,21 @@
             }
             var html = '';
             data.tables.forEach(function (tbl) {
+                var resume = tbl.total || { pemasukan: 0, pengeluaran: 0, saldo: 0 };
+                if (!tbl.total && tbl.rows && tbl.rows.length) {
+                    tbl.rows.forEach(function (r) {
+                        resume.pemasukan += r.pemasukan || 0;
+                        resume.pengeluaran += r.pengeluaran || 0;
+                        if (r.saldo) resume.saldo = r.saldo;
+                    });
+                }
                 html += '<div class="rekap-section"><div class="rekap-title">' + esc(tbl.title) + '</div>' +
+                    '<div class="rekap-total">' +
+                    '<span>Pemasukan: <span class="amount-in">Rp ' + fmt(resume.pemasukan) + '</span></span>' +
+                    '<span>Pengeluaran: <span class="amount-out">Rp ' + fmt(resume.pengeluaran) + '</span></span>' +
+                    '<span>Saldo Akhir: <span class="amount-saldo">Rp ' + fmt(resume.saldo) + '</span></span></div>' +
                     '<div class="table-container" style="border-radius:0 0 var(--radius) var(--radius)"><table><thead><tr>' +
-                    '<th>No</th><th>Tanggal</th><th>Transaksi</th><th class="text-right">Pemasukan</th><th class="text-right">Pengeluaran</th><th class="text-right">Saldo</th><th class="hide-mobile">Keterangan</th></thead><tbody>';
+                    '<th>No</th><th>Tanggal</th><th>Transaksi</th><th class="text-right">Pemasukan</th><th class="text-right">Pengeluaran</th><th class="text-right">Saldo</th><th class="hide-mobile">Keterangan</th><th class="hide-mobile">Bukti</th></tr></thead><tbody>';
                 tbl.rows.forEach(function (r) {
                     html += '<tr class="rekap-row">' +
                         '<td>' + (r.no || '') + '</td><td style="white-space:nowrap">' + esc(r.tanggal) + '</td><td>' + esc(r.transaksi) + '</td>' +
@@ -756,12 +779,6 @@
                         '<td class="hide-mobile">' + renderImgLink(r.linkGambar) + '</td></tr>';
                 });
                 html += '</tbody></table></div>';
-                if (tbl.total) {
-                    html += '<div class="rekap-total">' +
-                        '<span>Pemasukan: <span class="amount-in">Rp ' + fmt(tbl.total.pemasukan) + '</span></span>' +
-                        '<span>Pengeluaran: <span class="amount-out">Rp ' + fmt(tbl.total.pengeluaran) + '</span></span>' +
-                        '<span>Saldo: <span class="amount-saldo">Rp ' + fmt(tbl.total.saldo) + '</span></span></div>';
-                }
                 html += '</div>';
             });
             document.getElementById('rekapContent').innerHTML = html;
@@ -919,7 +936,8 @@
                             bulan: month.title,
                             tanggal: entry.tanggal,
                             nama: entry.nama,
-                            nominal: entry.nominal
+                            nominal: entry.nominal,
+                            order: paid.length
                         });
                     }
                 });
@@ -929,6 +947,15 @@
                 result.innerHTML = '<div class="empty-state" style="padding:1rem">Belum ada data iuran untuk rumah ' + esc(noRumah) + '</div>';
                 return;
             }
+
+            paid.sort(function (a, b) {
+                var aDate = parseDateForInput(a.tanggal);
+                var bDate = parseDateForInput(b.tanggal);
+                var aTime = aDate ? new Date(aDate + 'T00:00:00').getTime() : 0;
+                var bTime = bDate ? new Date(bDate + 'T00:00:00').getTime() : 0;
+                if (bTime !== aTime) return bTime - aTime;
+                return b.order - a.order;
+            });
 
             var html = '<div style="font-weight:700;margin-top:0.5rem">Rumah ' + esc(noRumah) + ' sudah bayar ' + paid.length + ' bulan</div>' +
                 '<div class="rumah-result">' +
