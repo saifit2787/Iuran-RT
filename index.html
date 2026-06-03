@@ -48,6 +48,7 @@
         .btn-danger { background: var(--danger); color: white; }
         .btn-secondary { background: var(--gray-200); color: var(--gray-700); }
         .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+        .action-buttons .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.65rem; }
         .btn-purple { background: var(--purple); color: white; }
 
         .table-container { background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow-x: auto; margin-bottom: 1rem; }
@@ -177,6 +178,10 @@
             thead th, tbody td { padding: 0.4rem 0.25rem; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
             .jurnal-row td:nth-child(2), .iuran-entry-row td:nth-child(2), .rekap-row td:nth-child(2) { white-space: normal !important; }
             .hide-mobile { display: none; }
+            .jurnal-row td { font-size: 0.7rem; padding: 0.3rem 0.2rem; }
+            .jurnal-row .amount-in, .jurnal-row .amount-out, .jurnal-row .amount-saldo { font-size: 0.68rem; }
+            .jurnal-row .action-buttons { gap: 0.15rem; }
+            .jurnal-row .action-buttons .btn-sm { padding: 0.1rem 0.25rem; font-size: 0.6rem; }
             .iuran-grid { grid-template-columns: 1fr; }
             .iuran-card { max-width: 100%; }
             .iuran-card table { min-width: 0; }
@@ -685,9 +690,9 @@
                         '<td class="hide-mobile">' + esc(t.keterangan) + renderImgLink(t.linkGambar) + '</td>' +
                         '<td class="text-center">' + ((t.isSaldoAwal || !isAuthenticated) ? '-' :
                             '<div class="action-buttons">' +
-                            '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + si + ',' + t.rowIndex + ')">Edit</button>' +
-                            '<button class="btn btn-success btn-sm" onclick="openBuktiModal(' + t.rowIndex + ')">Bukti</button>' +
-                            '<button class="btn btn-danger btn-sm" onclick="confirmDelete(' + t.rowIndex + ')">Hapus</button>' +
+                            '<button class="btn btn-secondary btn-sm" onclick="openEditModal(' + si + ',' + t.rowIndex + ')">E</button>' +
+                            '<button class="btn btn-success btn-sm" onclick="openBuktiModal(' + t.rowIndex + ')">B</button>' +
+                            '<button class="btn btn-danger btn-sm" onclick="confirmDelete(' + t.rowIndex + ')">H</button>' +
                             '</div>') + '</td></tr>';
                 });
                 html += '</tbody></table></div>';
