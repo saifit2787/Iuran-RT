@@ -172,12 +172,20 @@
             .toolbar { flex-direction: column; align-items: stretch; }
             .form-row { grid-template-columns: 1fr; }
             table { font-size: 0.75rem; }
-            thead th, tbody td { padding: 0.4rem 0.25rem; }
+            .table-container { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .table-container table, .iuran-card table { min-width: 100%; table-layout: auto; }
+            thead th, tbody td { padding: 0.4rem 0.25rem; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+            .jurnal-row td:nth-child(2), .iuran-entry-row td:nth-child(2), .rekap-row td:nth-child(2) { white-space: normal !important; }
             .hide-mobile { display: none; }
             .iuran-grid { grid-template-columns: 1fr; }
-            .rumah-result-row { grid-template-columns: 1fr; gap: 0.125rem; }
-            .rumah-result-paid { text-align: left; }
-            .donasi-card { grid-template-columns: 1fr; gap: 0.5rem; }
+            .iuran-card { max-width: 100%; }
+            .iuran-card table { min-width: 0; }
+            .iuran-card thead th { font-size: 0.72rem; padding: 0.45rem 0.3rem; }
+            .iuran-card tbody td { font-size: 0.76rem; padding: 0.45rem 0.3rem; }
+            .iuran-card-header, .iuran-card-footer { padding-left: 0.75rem; padding-right: 0.75rem; }
+            #viewJurnal table { table-layout: fixed; }
+            #viewJurnal th:nth-child(1), #viewJurnal td:nth-child(1) { width: 2rem; }
+            #viewJurnal th:nth-child(2), #vi; }
         }
         @media (max-width: 480px) { .summary-cards { grid-template-columns: 1fr; } }
     </style>
