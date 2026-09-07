@@ -801,10 +801,12 @@
           if (params[k] != null && params[k] !== '') url += '&' + k + '=' + encodeURIComponent(params[k]);
         }
       }
-      return fetch(url).then(function (r) { return r.json(); }).catch(function (e) {
-        showToast('Gagal: ' + e.message, 'error');
-        throw e;
-      });
+      return fetch(url)
+        .then(handleApiResponse)
+        .catch(function (e) {
+          showToast('Gagal: ' + e.message, 'error');
+          throw e;
+        });
     }
 
     function apiPost(data) {
@@ -813,9 +815,32 @@
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(data),
         redirect: 'follow'
-      }).then(function (r) { return r.json(); }).catch(function (e) {
-        showToast('Gagal: ' + e.message, 'error');
-        throw e;
+      })
+        .then(handleApiResponse)
+        .catch(function (e) {
+          showToast('Gagal: ' + e.message, 'error');
+          throw e;
+        });
+    }
+
+    // Menangani response fetch dengan aman: cek status HTTP dulu, lalu coba
+    // parse JSON. Kalau server balas HTML/teks (error, expired, quota habis,
+    // dll), user dapat pesan yang jelas alih-alih error parsing yang membingungkan.
+    function handleApiResponse(r) {
+      return r.text().then(function (raw) {
+        var parsed;
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          if (!r.ok) {
+            throw new Error('Server error (HTTP ' + r.status + '). Coba lagi beberapa saat lagi.');
+          }
+          throw new Error('Respons server tidak dikenali. Coba refresh halaman.');
+        }
+        if (!r.ok && !parsed.error) {
+          throw new Error('Server error (HTTP ' + r.status + ').');
+        }
+        return parsed;
       });
     }
 

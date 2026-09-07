@@ -1,5 +1,20 @@
 <?php
 // ============================================================
+//  ⚠️  FILE INI SUDAH TIDAK DIPAKAI (DEPRECATED) ⚠️
+// ============================================================
+//  Sisa dari versi lama sebelum aplikasi pindah ke Google Apps Script
+//  (lihat Kode.gs) sebagai backend. Semua pengambilan & penyimpanan data
+//  sekarang lewat Apps Script Web App (API_URL di index.html), BUKAN
+//  lewat file ini.
+//
+//  File ini juga TIDAK BISA berjalan di GitHub Pages karena GitHub Pages
+//  hanya hosting statis dan tidak menjalankan PHP — kalau file ini
+//  diakses langsung, isinya cuma ditampilkan sebagai teks mentah,
+//  bukan dieksekusi.
+//
+//  Aman untuk dihapus kapan saja. Disimpan sementara sebagai referensi.
+// ============================================================
+
 //  proxy.php — Ambil CSV Google Sheet tanpa kena CORS
 //  Upload file ini ke hosting PHP kamu (sama folder dengan index.html)
 // ============================================================
