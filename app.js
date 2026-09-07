@@ -1106,6 +1106,7 @@ var belumBayarPeriode = 3; // default 3 bulan terakhir
 var MONTH_INDEX_MAP = { Januari:0, Februari:1, Maret:2, April:3, Mei:4, Juni:5, Juli:6, Agustus:7, September:8, Oktober:9, November:10, Desember:11 };
 
 function openBelumBayarModal() {
+  if (!requireAuth('melihat daftar warga belum bayar')) return;
   document.getElementById('belumBayarManual').value = '';
   document.getElementById('belumBayarModal').classList.add('active');
   updatePeriodeButtonState();
