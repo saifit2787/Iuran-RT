@@ -858,9 +858,24 @@ function getWargaList() {
 function addWarga(map, nama, noRumah) {
   nama = (nama || '').toString().trim();
   noRumah = (noRumah || '').toString().trim();
-  if (nama && noRumah && nama.toLowerCase() !== 'total' && nama.toLowerCase().indexOf('iuran') < 0) {
-    map[nama + '|' + noRumah] = { nama: nama, noRumah: noRumah };
-  }
+  if (!nama || !noRumah) return;
+
+  var n = nama.toLowerCase();
+  var r = noRumah.toLowerCase().replace(/\s+/g, ' ');
+  // Abaikan header kolom, total, dan label yang sering ikut terbaca dari sheet
+  var banned = {
+    'nama': 1, 'total': 1, 'pengeluaran': 1, 'pemasukan': 1, 'saldo': 1,
+    'keterangan': 1, 'transaksi': 1, 'bulan': 1, 'iuran': 1, 'no': 1, 'no.': 1,
+    'berupa': 1, 'nominal': 1, 'tanggal': 1, 'metode': 1, 'ket': 1,
+    'no rumah': 1, 'no. rumah': 1, 'norumah': 1, 'rumah': 1, 'pos': 1
+  };
+  if (banned[n] || banned[r]) return;
+  if (n.indexOf('iuran') >= 0) return;
+  if (/^(no\.?\s*rumah|nama|total|pengeluaran|pemasukan)/i.test(nama)) return;
+  if (/^(no\.?\s*rumah|nama|total|pengeluaran|pemasukan)/i.test(noRumah)) return;
+  if (r === '0' || r === '-' || r === '—') return;
+
+  map[nama + '|' + noRumah] = { nama: nama, noRumah: noRumah };
 }
 
 // ==========================================

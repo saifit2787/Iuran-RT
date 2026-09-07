@@ -1102,12 +1102,36 @@ document.getElementById('loginPassword').addEventListener('keydown', function (e
 });
 
 // ==================== WARGA BELUM BAYAR ====================
+// Daftar master no rumah RT (semua unit yang wajib iuran).
+// Dipakai fitur Belum Bayar supaya rumah yang belum pernah bayar tetap muncul.
+var MASTER_NO_RUMAH = (function () {
+  var ranges = [
+    { prefix: 'F', from: 1, to: 8 },
+    { prefix: 'H', from: 1, to: 8 },
+    { prefix: 'I', from: 1, to: 5 },
+    { prefix: 'J', from: 1, to: 10 },
+    { prefix: 'K', from: 1, to: 12 }
+  ];
+  var list = [];
+  ranges.forEach(function (r) {
+    for (var n = r.from; n <= r.to; n++) list.push(r.prefix + n);
+  });
+  return list;
+})();
+
 var belumBayarPeriode = 3; // default 3 bulan terakhir
+var belumBayarCache = []; // { noRumah, nama, missing[], futurePaid[] }
+var belumBayarMode = 'periode'; // 'periode' | 'ranking' | 'rajin'
+var belumBayarHousesTotal = 0;
+var belumBayarPeriodeLabel = '';
+var belumBayarAllLabel = '';
+var belumBayarKategoriLabel = '';
 var MONTH_INDEX_MAP = { Januari:0, Februari:1, Maret:2, April:3, Mei:4, Juni:5, Juli:6, Agustus:7, September:8, Oktober:9, November:10, Desember:11 };
 
 function openBelumBayarModal() {
   if (!requireAuth('melihat daftar warga belum bayar')) return;
   document.getElementById('belumBayarManual').value = '';
+  belumBayarMode = 'periode';
   document.getElementById('belumBayarModal').classList.add('active');
   updatePeriodeButtonState();
   cekBelumBayar();
@@ -1128,6 +1152,7 @@ function updatePeriodeButtonState() {
 function setPeriodeBelumBayar(n) {
   belumBayarPeriode = n;
   document.getElementById('belumBayarManual').value = '';
+  belumBayarMode = 'periode';
   updatePeriodeButtonState();
   cekBelumBayar();
 }
@@ -1136,6 +1161,7 @@ function applyManualPeriode() {
   var v = parseInt(document.getElementById('belumBayarManual').value, 10);
   if (!v || v < 1) { showToast('Masukkan jumlah bulan yang valid', 'error'); return; }
   belumBayarPeriode = v;
+  belumBayarMode = 'periode';
   updatePeriodeButtonState();
   cekBelumBayar();
 }
@@ -1146,14 +1172,50 @@ function monthSortKey(tahun, bulan) {
   return parseInt(tahun, 10) * 12 + idx;
 }
 
-// Warga sudah dimuat otomatis saat startup (loadSheets -> loadWarga). Kalau
-// karena suatu sebab belum ada, fetch dulu sebelum lanjut.
-function ensureWargaLoaded() {
-  if (wargaData && wargaData.length) return Promise.resolve(wargaData);
-  return apiGet('getWarga').then(function (r) {
-    wargaData = (r && r.warga) || [];
-    return wargaData;
-  });
+// N bulan kalender terakhir dihitung dari BULAN SEKARANG (bukan dari
+// bulan terakhir yang ada di sheet). Contoh: hari ini Sep 2026, N=3
+// -> Juli 2026, Agustus 2026, September 2026.
+function getLastNCalendarMonths(n) {
+  var now = new Date();
+  var y = now.getFullYear();
+  var m = now.getMonth(); // 0 = Januari
+  var list = [];
+  for (var i = 0; i < n; i++) {
+    var mm = m - i;
+    var yy = y;
+    while (mm < 0) { mm += 12; yy -= 1; }
+    list.push({
+      tahun: String(yy),
+      bulan: MONTH_NAMES_ID[mm],
+      sortKey: yy * 12 + mm
+    });
+  }
+  list.reverse(); // dari paling lama ke paling baru
+  return list;
+}
+
+// Filter entri sampah (header kolom, total, label sheet) supaya tidak
+// dianggap sebagai warga/rumah di fitur Belum Bayar.
+function isValidWargaEntry(nama, noRumah) {
+  nama = (nama || '').toString().trim();
+  noRumah = (noRumah || '').toString().trim();
+  if (!nama || !noRumah) return false;
+
+  var n = nama.toLowerCase();
+  var r = noRumah.toLowerCase().replace(/\s+/g, ' ');
+
+  var bannedExact = {
+    'nama': 1, 'total': 1, 'pengeluaran': 1, 'pemasukan': 1, 'saldo': 1,
+    'keterangan': 1, 'transaksi': 1, 'bulan': 1, 'iuran': 1, 'no': 1, 'no.': 1,
+    'berupa': 1, 'nominal': 1, 'tanggal': 1, 'metode': 1, 'ket': 1,
+    'no rumah': 1, 'no. rumah': 1, 'norumah': 1, 'rumah': 1, 'pos': 1
+  };
+  if (bannedExact[n] || bannedExact[r]) return false;
+  if (n.indexOf('iuran') >= 0) return false;
+  if (/^(no\.?\s*rumah|nama|total|pengeluaran|pemasukan)/i.test(nama)) return false;
+  if (/^(no\.?\s*rumah|nama|total|pengeluaran|pemasukan)/i.test(noRumah)) return false;
+  if (r === '0' || r === '-' || r === '—') return false;
+  return true;
 }
 
 function cekBelumBayar() {
@@ -1161,72 +1223,271 @@ function cekBelumBayar() {
   var result = document.getElementById('belumBayarResult');
   result.innerHTML = '<div class="loading"><div class="spinner"></div><p>Memuat data...</p></div>';
 
-  Promise.all([loadAllIuranSheets(), ensureWargaLoaded()]).then(function (all) {
-    var iuranResults = all[0];
-    var warga = all[1];
-
-    // Kumpulkan semua bulan unik untuk kategori ini (gabung dari semua sheet), urut kronologis
+  // Sumber daftar rumah: HANYA dari entri iuran kategori yang dipilih
+  // (bukan getWarga lintas sheet). Alasan:
+  // - Rumah yang hanya ada di Iuran RT tidak muncul saat cek Iuran Pos
+  // - Header/label sheet tidak ikut terbaca sebagai warga
+  loadAllIuranSheets().then(function (iuranResults) {
     var monthsMap = {};
+    // Nama dari data iuran / warga (opsional). Daftar rumah WAJIB dari MASTER_NO_RUMAH
+    // supaya unit yang belum pernah bayar tetap ikut dicek.
+    var namaByRumah = {};
+
     iuranResults.forEach(function (r) {
       if (!r || r.error || !r.months) return;
       r.months.forEach(function (month) {
         var info = parseIuranMonthTitle(month.title);
         if ((info.kategori || '').toLowerCase() !== kategoriFilter.toLowerCase()) return;
+
+        var validEntries = [];
+        (month.entries || []).forEach(function (e) {
+          if (!isValidWargaEntry(e.nama, e.noRumah)) return;
+          validEntries.push(e);
+          var key = normalizeRumah(e.noRumah);
+          if (!key) return;
+          if (e.nama && e.nama.trim()) namaByRumah[key] = e.nama.trim();
+        });
+
         var sortKey = monthSortKey(info.tahun, info.bulan);
         if (sortKey == null) return;
-        if (!monthsMap[sortKey]) monthsMap[sortKey] = { tahun: info.tahun, bulan: info.bulan, sortKey: sortKey, entries: [] };
-        monthsMap[sortKey].entries = monthsMap[sortKey].entries.concat(month.entries || []);
+        if (!monthsMap[sortKey]) {
+          monthsMap[sortKey] = { tahun: info.tahun, bulan: info.bulan, sortKey: sortKey, entries: [] };
+        }
+        monthsMap[sortKey].entries = monthsMap[sortKey].entries.concat(validEntries);
       });
     });
 
-    var allMonths = Object.keys(monthsMap).map(function (k) { return monthsMap[k]; }).sort(function (a, b) { return a.sortKey - b.sortKey; });
-    if (!allMonths.length) {
-      result.innerHTML = '<div class="empty-state" style="padding:1rem">Tidak ada data untuk kategori ' + esc(kategoriFilter) + '</div>';
-      return;
-    }
-    var targetMonths = allMonths.slice(-belumBayarPeriode);
-
-    // Daftar rumah unik dari data warga (dedup berdasarkan No Rumah)
-    var housesMap = {};
-    warga.forEach(function (w) {
+    // Lengkapi nama dari cache warga (jurnal/donasi) jika ada
+    (wargaData || []).forEach(function (w) {
+      if (!isValidWargaEntry(w.nama, w.noRumah)) return;
       var key = normalizeRumah(w.noRumah);
-      if (!key) return;
-      if (!housesMap[key]) housesMap[key] = { noRumah: w.noRumah, nama: w.nama };
+      if (key && w.nama && !namaByRumah[key]) namaByRumah[key] = w.nama.trim();
     });
-    var houses = Object.keys(housesMap).map(function (k) { return housesMap[k]; });
 
-    var belumBayarList = [];
+    // Periode = N bulan kalender terakhir dari HARI INI
+    var targetMonths = getLastNCalendarMonths(belumBayarPeriode);
+
+    // Semua no rumah master (F1-F8, H1-H8, I1-I5, J1-J10, K1-K12)
+    var houses = MASTER_NO_RUMAH.map(function (no) {
+      var key = normalizeRumah(no);
+      return { noRumah: no, nama: namaByRumah[key] || '' };
+    });
+
+    // Tiga data terpisah:
+    // - missingPeriode: hanya N bulan terakhir (tombol 1/3/6/Terapkan)
+    // - missingAll: SEMUA bulan di data s.d. bulan ini (Ranking belum bayar)
+    // - futurePaid: bulan SETELAH sekarang yang sudah dibayar (Paling rajin)
+    var now = new Date();
+    var currentSortKey = now.getFullYear() * 12 + now.getMonth();
+
+    var allPastKeys = Object.keys(monthsMap).map(function (k) { return parseInt(k, 10); })
+      .filter(function (sk) { return !isNaN(sk) && sk <= currentSortKey; })
+      .sort(function (a, b) { return a - b; });
+
+    var futureMonthKeys = Object.keys(monthsMap).map(function (k) { return parseInt(k, 10); })
+      .filter(function (sk) { return !isNaN(sk) && sk > currentSortKey; })
+      .sort(function (a, b) { return a - b; });
+
+    var allStats = [];
     houses.forEach(function (h) {
       var key = normalizeRumah(h.noRumah);
-      var missing = [];
+
+      // Filter periode (1/3/6/manual) — hanya N bulan kalender terakhir
+      var missingPeriode = [];
       targetMonths.forEach(function (m) {
-        var paid = m.entries.some(function (e) { return normalizeRumah(e.noRumah) === key; });
-        if (!paid) missing.push(m.bulan + ' ' + m.tahun);
+        var bucket = monthsMap[m.sortKey];
+        var entries = bucket ? bucket.entries : [];
+        var paid = entries.some(function (e) { return normalizeRumah(e.noRumah) === key; });
+        if (!paid) {
+          missingPeriode.push({ label: m.bulan + ' ' + m.tahun, sortKey: m.sortKey });
+        }
       });
-      if (missing.length > 0) belumBayarList.push({ noRumah: h.noRumah, nama: h.nama, missing: missing });
+
+      // Ranking: semua bulan historis di sheet yang belum dibayar
+      var missingAll = [];
+      allPastKeys.forEach(function (sk) {
+        var bucket = monthsMap[sk];
+        if (!bucket) return;
+        var paid = (bucket.entries || []).some(function (e) {
+          return normalizeRumah(e.noRumah) === key;
+        });
+        if (!paid) {
+          missingAll.push({ label: bucket.bulan + ' ' + bucket.tahun, sortKey: sk });
+        }
+      });
+
+      // Paling rajin: bayar di bulan setelah bulan ini
+      var futurePaid = [];
+      futureMonthKeys.forEach(function (sk) {
+        var bucket = monthsMap[sk];
+        if (!bucket) return;
+        var paid = (bucket.entries || []).some(function (e) {
+          return normalizeRumah(e.noRumah) === key;
+        });
+        if (paid) {
+          futurePaid.push({ label: bucket.bulan + ' ' + bucket.tahun, sortKey: sk });
+        }
+      });
+
+      allStats.push({
+        noRumah: h.noRumah,
+        nama: h.nama,
+        missingPeriode: missingPeriode,
+        missingAll: missingAll,
+        futurePaid: futurePaid
+      });
     });
 
-    belumBayarList.sort(function (a, b) { return b.missing.length - a.missing.length; });
-    var periodeLabel = targetMonths.map(function (m) { return m.bulan + ' ' + m.tahun; }).join(', ');
-
-    if (!belumBayarList.length) {
-      result.innerHTML = '<div class="belum-bayar-summary">Periode dicek: ' + esc(periodeLabel) + '</div>' +
-        '<div class="empty-state" style="padding:1.5rem;color:var(--success)">\u2713 Semua warga lunas untuk periode ini</div>';
-      return;
+    var labelPeriode = targetMonths.map(function (m) { return m.bulan + ' ' + m.tahun; }).join(', ');
+    var labelAll = '';
+    if (allPastKeys.length) {
+      var firstB = monthsMap[allPastKeys[0]];
+      var lastB = monthsMap[allPastKeys[allPastKeys.length - 1]];
+      labelAll = (firstB ? firstB.bulan + ' ' + firstB.tahun : '') +
+        ' s.d. ' + (lastB ? lastB.bulan + ' ' + lastB.tahun : '') +
+        ' (' + allPastKeys.length + ' bulan di data)';
     }
 
-    var html = '<div class="belum-bayar-summary">Periode dicek: ' + esc(periodeLabel) + ' &middot; <strong>' + belumBayarList.length + '</strong> rumah belum lunas</div><div class="belum-bayar-list">';
-    belumBayarList.forEach(function (item) {
-      html += '<div class="belum-bayar-row">' +
-        '<div class="belum-bayar-info"><strong>' + esc(item.noRumah) + '</strong> &middot; ' + esc(item.nama || '-') + '</div>' +
-        '<div class="belum-bayar-months">' + item.missing.map(function (m) { return '<span class="belum-bayar-tag">' + esc(m) + '</span>'; }).join('') + '</div>' +
-        '</div>';
-    });
-    html += '</div>';
-    result.innerHTML = html;
+    belumBayarCache = allStats;
+    belumBayarHousesTotal = houses.length;
+    belumBayarPeriodeLabel = labelPeriode;
+    belumBayarAllLabel = labelAll;
+    belumBayarKategoriLabel = kategoriFilter;
+    // Mode tidak diubah di sini kecuali belum diset; tombol yang menentukan mode
+    if (!belumBayarMode) belumBayarMode = 'periode';
+
+    var toolbar = document.getElementById('belumBayarToolbar');
+    var searchInput = document.getElementById('belumBayarSearch');
+    if (searchInput) searchInput.value = '';
+    if (toolbar) toolbar.style.display = 'flex';
+    updateBelumBayarModeButtons();
+    renderBelumBayarList();
   }).catch(function (err) {
     result.innerHTML = '<div class="empty-state" style="padding:1rem">Gagal memuat data: ' + esc(err.message) + '</div>';
   });
+}
+
+
+function updateBelumBayarModeButtons() {
+  var btnRank = document.getElementById('btnModeRanking');
+  var btnRajin = document.getElementById('btnModeRajin');
+  if (btnRank) {
+    var on = belumBayarMode === 'ranking';
+    btnRank.classList.toggle('btn-danger', on);
+    btnRank.classList.toggle('btn-secondary', !on);
+  }
+  if (btnRajin) {
+    var onJ = belumBayarMode === 'rajin';
+    btnRajin.classList.toggle('btn-success', onJ);
+    btnRajin.classList.toggle('btn-secondary', !onJ);
+  }
+}
+
+function setBelumBayarMode(mode) {
+  if (mode === 'rajin') belumBayarMode = 'rajin';
+  else if (mode === 'ranking') belumBayarMode = 'ranking';
+  else belumBayarMode = 'periode';
+  updateBelumBayarModeButtons();
+  renderBelumBayarList();
+}
+
+function filterBelumBayarList() {
+  renderBelumBayarList();
+}
+
+function renderBelumBayarList() {
+  var result = document.getElementById('belumBayarResult');
+  if (!result) return;
+  var q = ((document.getElementById('belumBayarSearch') || {}).value || '').toLowerCase().trim();
+  var mode = belumBayarMode || 'periode';
+
+  var list = (belumBayarCache || []).filter(function (item) {
+    if (mode === 'rajin') return item.futurePaid && item.futurePaid.length > 0;
+    if (mode === 'ranking') return item.missingAll && item.missingAll.length > 0;
+    // periode: 1/3/6/Terapkan
+    return item.missingPeriode && item.missingPeriode.length > 0;
+  });
+
+  if (q) {
+    list = list.filter(function (item) {
+      var hay = ((item.noRumah || '') + ' ' + (item.nama || '')).toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+  }
+
+  list.sort(function (a, b) {
+    var ca, cb;
+    if (mode === 'rajin') {
+      ca = a.futurePaid.length; cb = b.futurePaid.length;
+    } else if (mode === 'ranking') {
+      ca = a.missingAll.length; cb = b.missingAll.length;
+    } else {
+      ca = a.missingPeriode.length; cb = b.missingPeriode.length;
+    }
+    if (cb !== ca) return cb - ca;
+    return String(a.noRumah).localeCompare(String(b.noRumah), 'id', { numeric: true });
+  });
+
+  var title, periodeText, emptyMsg, countSuffix;
+  if (mode === 'rajin') {
+    title = 'Paling rajin (bayar melebihi bulan ini)';
+    periodeText = belumBayarAllLabel || belumBayarPeriodeLabel;
+    emptyMsg = 'Belum ada rumah yang bayar di bulan setelah bulan ini';
+    countSuffix = ' bulan di muka';
+  } else if (mode === 'ranking') {
+    title = 'Ranking belum bayar (semua bulan)';
+    periodeText = belumBayarAllLabel || belumBayarPeriodeLabel;
+    emptyMsg = 'Semua warga lunas di semua bulan data';
+    countSuffix = ' bulan tunggak';
+  } else {
+    title = 'Belum bayar (' + belumBayarPeriode + ' bulan terakhir)';
+    periodeText = belumBayarPeriodeLabel;
+    emptyMsg = 'Semua warga lunas untuk periode ini';
+    countSuffix = ' bulan';
+  }
+
+  if (!list.length) {
+    result.innerHTML = '<div class="belum-bayar-summary">' + esc(title) +
+      '<br>Periode: ' + esc(periodeText || '-') + '</div>' +
+      '<div class="empty-state" style="padding:1.5rem;color:var(--success)">\u2713 ' + emptyMsg +
+      (q ? ' (filter: "' + esc(q) + '")' : '') + '</div>';
+    return;
+  }
+
+  var html = '<div class="belum-bayar-summary"><strong>' + esc(title) + '</strong><br>' +
+    'Periode: ' + esc(periodeText || '-') +
+    ' &middot; <strong>' + list.length + '</strong> rumah' +
+    (q ? ' (filter)' : '') +
+    ' <span style="color:var(--gray-500);font-weight:400">(dari ' + belumBayarHousesTotal +
+    ' rumah di ' + esc(belumBayarKategoriLabel) + ')</span></div>' +
+    '<div class="belum-bayar-list">';
+
+  list.forEach(function (item, idx) {
+    var rawTags;
+    if (mode === 'rajin') rawTags = item.futurePaid;
+    else if (mode === 'ranking') rawTags = item.missingAll;
+    else rawTags = item.missingPeriode;
+
+    var tags = (rawTags || []).slice().sort(function (a, b) {
+      return (a.sortKey || 0) - (b.sortKey || 0);
+    });
+    var showRank = (mode === 'ranking' || mode === 'rajin');
+    html += '<div class="belum-bayar-row">' +
+      '<div class="belum-bayar-info">' +
+      (showRank ? '<span class="belum-bayar-rank">#' + (idx + 1) + '</span> ' : '') +
+      '<strong>' + esc(item.noRumah) + '</strong> &middot; ' + esc(item.nama || '-') +
+      ' <span class="belum-bayar-count' + (mode === 'rajin' ? ' belum-bayar-count-ok' : '') + '">' +
+      tags.length + countSuffix + '</span></div>' +
+      '<div class="belum-bayar-months">' +
+      tags.map(function (m) {
+        var label = typeof m === 'string' ? m : m.label;
+        return '<span class="belum-bayar-tag' + (mode === 'rajin' ? ' belum-bayar-tag-ok' : '') + '">' +
+          esc(label) + '</span>';
+      }).join('') +
+      '</div></div>';
+  });
+  html += '</div>';
+  result.innerHTML = html;
 }
 
 function togglePasswordVisibility() {

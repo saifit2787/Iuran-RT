@@ -511,3 +511,111 @@ body.logged-in .admin-only { display: inline-flex !important; }
 @media (max-width: 480px) {
   .summary-cards { grid-template-columns: 1fr; }
 }
+
+/* Belum Bayar modal */
+.period-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.period-buttons-row {
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
+}
+.period-buttons-left,
+.period-buttons-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.period-buttons-right {
+  margin-left: auto;
+}
+.belum-bayar-count-ok {
+  color: var(--success) !important;
+  background: var(--success-light) !important;
+}
+.belum-bayar-tag-ok {
+  color: var(--success) !important;
+  background: var(--success-light) !important;
+  border-color: #86efac !important;
+}
+.belum-bayar-summary {
+  background: var(--danger-light);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--gray-700);
+}
+.belum-bayar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.belum-bayar-row {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.belum-bayar-info {
+  font-size: 0.9rem;
+  color: var(--gray-800);
+}
+.belum-bayar-months {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.belum-bayar-tag {
+  display: inline-block;
+  background: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.belum-bayar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.belum-bayar-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.35rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: var(--gray-200);
+  color: var(--gray-700);
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-right: 0.25rem;
+}
+.belum-bayar-count {
+  margin-left: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--danger);
+  background: var(--danger-light);
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+}

@@ -240,13 +240,22 @@
         </div>
         <div class="form-group">
           <label>Periode Cek (bulan terakhir)</label>
-          <div class="period-buttons">
-            <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="1" onclick="setPeriodeBelumBayar(1)">1 Bulan</button>
-            <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="3" onclick="setPeriodeBelumBayar(3)">3 Bulan</button>
-            <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="6" onclick="setPeriodeBelumBayar(6)">6 Bulan</button>
-            <input type="number" id="belumBayarManual" placeholder="Manual" min="1" style="width:85px" />
-            <button type="button" class="btn btn-primary btn-sm" onclick="applyManualPeriode()">Terapkan</button>
+          <div class="period-buttons period-buttons-row">
+            <div class="period-buttons-left">
+              <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="1" onclick="setPeriodeBelumBayar(1)">1 Bulan</button>
+              <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="3" onclick="setPeriodeBelumBayar(3)">3 Bulan</button>
+              <button type="button" class="btn btn-secondary btn-sm period-btn" data-n="6" onclick="setPeriodeBelumBayar(6)">6 Bulan</button>
+              <input type="number" id="belumBayarManual" placeholder="Manual" min="1" style="width:85px" />
+              <button type="button" class="btn btn-primary btn-sm" onclick="applyManualPeriode()">Terapkan</button>
+            </div>
+            <div class="period-buttons-right">
+              <button type="button" id="btnModeRanking" class="btn btn-danger btn-sm" onclick="setBelumBayarMode('ranking')">Ranking belum bayar</button>
+              <button type="button" id="btnModeRajin" class="btn btn-success btn-sm" onclick="setBelumBayarMode('rajin')">Paling rajin</button>
+            </div>
           </div>
+        </div>
+        <div id="belumBayarToolbar" class="belum-bayar-toolbar" style="display:none">
+          <input type="text" id="belumBayarSearch" class="search-input" placeholder="Cari no rumah / nama..." oninput="filterBelumBayarList()" style="flex:1;min-width:140px" />
         </div>
         <div id="belumBayarResult"></div>
       </div>
