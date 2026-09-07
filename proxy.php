@@ -10,13 +10,73 @@
 // define('SHEET_CSV_URL', 'https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/export?format=csv&gid=0');
 define('SHEET_CSV_URL', 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSDTNkRGh-PTDBt8t_wFIE91kvHPFrHO1nQYVjawwTU4LL_UhRl0i0vwJE3x3TeLAb2taGGhG7DgHVz/pub?gid=387111055&single=true&output=csv');
 
+// Domain yang boleh akses proxy ini. Tambahkan alamat lain di sini kalau perlu
+// (misal saat development lokal pakai http://localhost).
+$ALLOWED_ORIGINS = [
+    'https://rt08.pilang.my.id',
+];
+
+define('CACHE_FILE', __DIR__ . '/cache_sheet.csv');
+define('CACHE_TTL', 60);        // simpan cache selama 60 detik
+define('RATE_LIMIT_DIR', __DIR__ . '/rate_limit');
+define('RATE_LIMIT_MAX', 30);   // maksimal 30 request
+define('RATE_LIMIT_WINDOW', 60); // per 60 detik, per alamat IP
 
 // ============================================================
-//  Izinkan akses dari semua origin (CORS header)
+//  CORS — hanya izinkan origin yang terdaftar
 // ============================================================
-header('Access-Control-Allow-Origin: *');
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+if (in_array($origin, $ALLOWED_ORIGINS, true)) {
+    header('Access-Control-Allow-Origin: ' . $origin);
+} elseif (empty($ALLOWED_ORIGINS)) {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Content-Type: text/csv; charset=UTF-8');
 header('Cache-Control: no-cache, must-revalidate');
+
+// ============================================================
+//  Rate limiting sederhana berbasis file, per alamat IP
+// ============================================================
+function tooManyRequests() {
+    if (!is_dir(RATE_LIMIT_DIR)) {
+        @mkdir(RATE_LIMIT_DIR, 0755, true);
+    }
+    $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $safeName = preg_replace('/[^a-zA-Z0-9_.]/', '_', $ip);
+    $file = RATE_LIMIT_DIR . '/' . $safeName . '.json';
+
+    $now = time();
+    $data = ['count' => 0, 'start' => $now];
+
+    if (file_exists($file)) {
+        $existing = json_decode(@file_get_contents($file), true);
+        if (is_array($existing) && isset($existing['start'], $existing['count'])) {
+            if ($now - $existing['start'] < RATE_LIMIT_WINDOW) {
+                $data = $existing;
+            }
+        }
+    }
+
+    $data['count']++;
+    @file_put_contents($file, json_encode($data));
+
+    return $data['count'] > RATE_LIMIT_MAX;
+}
+
+if (tooManyRequests()) {
+    header('Content-Type: application/json');
+    http_response_code(429);
+    echo json_encode(['error' => 'Terlalu banyak permintaan. Coba lagi sebentar lagi.']);
+    exit;
+}
+
+// ============================================================
+//  Coba pakai cache dulu kalau masih fresh
+// ============================================================
+if (file_exists(CACHE_FILE) && (time() - filemtime(CACHE_FILE) < CACHE_TTL)) {
+    readfile(CACHE_FILE);
+    exit;
+}
 
 // ============================================================
 //  Fetch CSV dari Google Sheet menggunakan cURL
@@ -42,30 +102,29 @@ $curlError = curl_error($ch);
 curl_close($ch);
 
 // ============================================================
-//  Error handling
+//  Error handling — kalau gagal, coba pakai cache lama walau kadaluarsa
 // ============================================================
-if ($curlError) {
+if ($curlError || $httpCode !== 200 || empty($response)) {
+    if (file_exists(CACHE_FILE)) {
+        readfile(CACHE_FILE);
+        exit;
+    }
     header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode(['error' => 'cURL error: ' . $curlError]);
-    exit;
-}
-
-if ($httpCode !== 200) {
-    header('Content-Type: application/json');
-    http_response_code($httpCode);
-    echo json_encode(['error' => 'HTTP error: ' . $httpCode . '. Pastikan Sheet sudah di-publish.']);
-    exit;
-}
-
-if (empty($response)) {
-    header('Content-Type: application/json');
-    http_response_code(500);
-    echo json_encode(['error' => 'Respons kosong dari Google Sheets.']);
+    if ($curlError) {
+        http_response_code(500);
+        echo json_encode(['error' => 'cURL error: ' . $curlError]);
+    } elseif ($httpCode !== 200) {
+        http_response_code($httpCode);
+        echo json_encode(['error' => 'HTTP error: ' . $httpCode . '. Pastikan Sheet sudah di-publish.']);
+    } else {
+        http_response_code(500);
+        echo json_encode(['error' => 'Respons kosong dari Google Sheets.']);
+    }
     exit;
 }
 
 // ============================================================
-//  Kirim CSV ke browser
+//  Simpan ke cache lalu kirim CSV ke browser
 // ============================================================
+@file_put_contents(CACHE_FILE, $response);
 echo $response;
