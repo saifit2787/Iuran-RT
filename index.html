@@ -501,7 +501,7 @@
     <div class="setup-banner" id="setupBanner">
       <h3>Pengaturan Awal</h3>
       <p style="font-size:0.8rem;margin-bottom:0.5rem;color:var(--gray-600)">Masukkan URL Google Apps Script Web App:</p>
-      <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec" value="https://script.google.com/macros/s/AKfycbxS_hUvlv6__xVHPvGgCGdjxo2VvOPO6YlcpKHmKl_k8l9Xa__6j8j4ka4TUp5WxZzm/exec" />
+      <input type="text" id="apiUrlInput" placeholder="https://script.google.com/macros/s/XXXX/exec" value="https://script.google.com/macros/s/AKfycbwzNOiozb6RbXT4JSBr5GBQq950vuq3_gCgJq9ySGkQnmen3RRMPzlhrFrzy46JzvPo/exec" />
       <button class="btn-save-url" onclick="saveApiUrl()">Simpan URL</button>
     </div>
 
@@ -683,9 +683,7 @@
     var selectedJurnalSection = -1;
     var selectedIuranMonth = -1;
     var isAuthenticated = false;
-    var AUTH_STORAGE_KEY = 'iuranrt_logged_in';
-    var AUTH_PASSWORD_KEY = 'iuranrt_login_password';
-    var AUTH_DEFAULT_PASSWORD = 'saifit2787';
+    var AUTH_TOKEN_KEY = 'iuranrt_auth_token';
 
     document.addEventListener('DOMContentLoaded', function () {
       checkAuth();
@@ -712,9 +710,13 @@
     }
 
     function checkAuth() {
-      isAuthenticated = localStorage.getItem(AUTH_STORAGE_KEY) === 'true';
+      isAuthenticated = !!localStorage.getItem(AUTH_TOKEN_KEY);
       updateAuthUI();
       return isAuthenticated;
+    }
+
+    function getAuthToken() {
+      return localStorage.getItem(AUTH_TOKEN_KEY) || '';
     }
 
     function updateAuthUI() {
@@ -730,12 +732,6 @@
       if (addBtn) addBtn.style.display = isAuthenticated ? 'inline-flex' : 'none';
     }
 
-    function isAuthValid(password) {
-      var saved = localStorage.getItem(AUTH_PASSWORD_KEY);
-      if (saved) return password === saved;
-      return password === AUTH_DEFAULT_PASSWORD;
-    }
-
     function openLoginModal() { document.getElementById('loginModal').classList.add('active'); }
     function closeLoginModal() {
       document.getElementById('loginModal').classList.remove('active');
@@ -746,20 +742,19 @@
     function login() {
       var password = document.getElementById('loginPassword').value || '';
       if (!password) { showToast('Masukkan password', 'error'); return; }
-      if (isAuthValid(password)) {
-        localStorage.setItem(AUTH_STORAGE_KEY, 'true');
+      apiPost({ action: 'login', password: password }).then(function (r) {
+        if (r.error) { showToast(r.error, 'error'); return; }
+        localStorage.setItem(AUTH_TOKEN_KEY, r.token);
         isAuthenticated = true;
         closeLoginModal();
         updateAuthUI();
         refreshCurrentView();
         showToast('Berhasil login', 'success');
-        return;
-      }
-      showToast('Password salah', 'error');
+      });
     }
 
     function logout() {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       isAuthenticated = false;
       updateAuthUI();
       refreshCurrentView();
@@ -1193,19 +1188,18 @@
       return null;
     }
 
-    // ==================== BUKTI + SHARE WA ====================
+    // ==================== BUKTI + SHARE WA (Web Share API) ====================
     function openBuktiModal(rowIdx) {
-    var t = findJurnalTransaction(rowIdx);
-    if (!t) {
+      var t = findJurnalTransaction(rowIdx);
+      if (!t) {
         showToast('Data transaksi tidak ditemukan', 'error');
         return;
-    }
+      }
 
-    var jumlah = t.pemasukan || t.pengeluaran || 0;
+      var jumlah = t.pemasukan || t.pengeluaran || 0;
 
     document.getElementById('buktiContent').innerHTML = `
-        <!-- Area yang akan di-screenshot -->
-        <div id="buktiPrintArea" style="
+    <div id="buktiPrintArea" style="
         background: white;
         padding: 24px;
         border-radius: 12px;
@@ -1214,185 +1208,134 @@
         margin: 0 auto;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #1f2937;
-        ">
+    ">
         <div style="text-align:center; margin-bottom: 16px;">
-            <div style="font-size: 18px; font-weight: 700; color: #1e40af;">Bukti Pembayaran</div>
-            <div style="font-size: 14px; color: #4b5563; margin-top: 4px;">RT 08 RW 13 • LPR Pilang - Sidodadi</div>
+        <div style="font-size: 18px; font-weight: 700; color: #1e40af;">Bukti Pembayaran</div>
+        <div style="font-size: 14px; color: #4b5563; margin-top: 4px;">RT 08 RW 13 • LPR Pilang - Sidodadi</div>
         </div>
 
         <table style="width:100%; font-size: 14px; border-collapse: collapse;">
-            <tr>
+        <tr>
             <td style="padding: 6px 0; width: 110px; color: #6b7280; font-weight: 600;">Tanggal</td>
             <td style="padding: 6px 0;">: ${esc(t.tanggal)}</td>
-            </tr>
-            <tr>
+        </tr>
+        <tr>
             <td style="padding: 6px 0; color: #6b7280; font-weight: 600;">Nama</td>
             <td style="padding: 6px 0;">: ${esc(t.nama)}</td>
-            </tr>
-            <tr>
+        </tr>
+        <tr>
             <td style="padding: 6px 0; color: #6b7280; font-weight: 600;">No Rumah</td>
             <td style="padding: 6px 0;">: ${esc(t.noRumah || '-')}</td>
-            </tr>
-            <tr>
+        </tr>
+        <tr>
             <td style="padding: 6px 0; color: #6b7280; font-weight: 600;">Jumlah</td>
             <td style="padding: 6px 0; font-weight: 700; color: #16a34a;">: Rp ${fmt(jumlah)}</td>
-            </tr>
-            <tr>
+        </tr>
+        <tr>
             <td style="padding: 6px 0; color: #6b7280; font-weight: 600;">Pembayaran</td>
             <td style="padding: 6px 0;">: ${esc(t.transaksi || '-')}</td>
-            </tr>
+        </tr>
         </table>
 
         <div style="
-            margin-top: 20px;
-            padding-top: 14px;
-            border-top: 1px dashed #d1d5db;
-            font-size: 13px;
-            color: #4b5563;
-            text-align: center;
-            line-height: 1.5;
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px dashed #d1d5db;
+        font-size: 13px;
+        color: #4b5563;
+        text-align: center;
+        line-height: 1.5;
         ">
-            Terima kasih atas pembayarannya<br>
-            Jika ada kesalahan hubungi bendahara<br>
-            <strong>0817-0300-65656</strong>
-        </div>
+        Terima kasih atas pembayarannya<br>
+        Jika ada kesalahan hubungi bendahara<br>
+        <strong>0817-0300-65656</strong>
         </div>
 
-        <!-- Tombol aksi -->
-        <div style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
+        <!-- Teks pesan dimasukkan ke dalam gambar -->
+        <div style="
+        margin-top: 18px;
+        padding: 12px;
+        background: #f0f9ff;
+        border-radius: 8px;
+        font-size: 12.5px;
+        color: #1e3a8a;
+        text-align: center;
+        line-height: 1.55;
+        ">
+        <strong>Bukti Pembayaran</strong><br>
+        Terima Kasih 🙏🏻🙏🏻<br><br>
+        Pembukuan bisa dilihat di<br>
+        <span style="color:#2563eb;">https://rt08.pilang.my.id/</span><br>
+        Atau di Google Sheet<br>
+        <span style="font-size:11px; word-break:break-all;">https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yLfsQ</span>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
         <button class="btn btn-secondary" style="width:100%; margin-bottom: 10px;" onclick="downloadBuktiImage()">
-            📥 Download Gambar Bukti
+        📥 Download Gambar Bukti
         </button>
 
         <div class="form-group" style="margin-bottom: 10px;">
-            <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563;">Nomor WhatsApp tujuan (opsional jika pakai Share)</label>
-            <input type="tel" id="waNumberInput" 
+        <label style="font-size: 0.8rem; font-weight: 600; color: #4b5563;">Nomor WhatsApp tujuan (opsional)</label>
+        <input type="tel" id="waNumberInput" 
                 placeholder="08xxxxxxxxxx atau 628xxxxxxxxxx"
                 style="width:100%; padding: 0.55rem 0.75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 0.9rem;">
         </div>
 
         <button class="btn btn-success" style="width:100%;" onclick="shareBuktiToWA()">
-            📤 Bagikan ke WhatsApp
+        📤 Bagikan ke WhatsApp
         </button>
 
         <p style="font-size: 0.72rem; color: #6b7280; margin-top: 10px; text-align: center; line-height: 1.4;">
-            Di HP modern: akan muncul menu Share → pilih WhatsApp (lebih otomatis).<br>
-            Jika tidak, gambar akan diunduh + chat WA dibuka.
+        Teks pesan sudah termasuk di dalam gambar.<br>
+        Di HP modern akan muncul menu Share → pilih WhatsApp.
         </p>
-        </div>
-    `;
-
-    document.getElementById('buktiModal').classList.add('active');
+    </div>
+    `;     
+        
+      document.getElementById('buktiModal').classList.add('active');
     }
-
-function closeBuktiModal() {
-  document.getElementById('buktiModal').classList.remove('active');
-}
-
-// Fungsi download gambar saja
-function downloadBuktiImage() {
-  var area = document.getElementById('buktiPrintArea');
-  if (!area) {
-    showToast('Area bukti tidak ditemukan', 'error');
-    return;
-  }
-
-  showToast('Sedang membuat gambar...', 'info');
-
-  html2canvas(area, {
-    scale: 2.5,
-    backgroundColor: '#ffffff',
-    useCORS: true,
-    allowTaint: true,
-    logging: false
-  }).then(function(canvas) {
-    var link = document.createElement('a');
-    link.download = 'Bukti-Pembayaran-RT08-' + Date.now() + '.png';
-    link.href = canvas.toDataURL('image/png');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Gambar berhasil diunduh!', 'success');
-  }).catch(function(err) {
-    console.error(err);
-    showToast('Gagal membuat gambar. Coba lagi.', 'error');
-  });
-}
-
-// Fungsi share ke WA
-function shareBuktiToWA() {
-  var phone = (document.getElementById('waNumberInput').value || '').trim();
-  if (!phone) {
-    showToast('Masukkan nomor WhatsApp terlebih dahulu', 'error');
-    return;
-  }
-
-  // Normalisasi nomor
-  phone = phone.replace(/\D/g, '');
-  if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-  if (!phone.startsWith('62')) phone = '62' + phone;
-
-  var text = `Bukti Pembayaran
-    Terima Kasih 🙏🏻🙏🏻 🙏🏻
-    Pembukuan bisa dilihat di 
-    https://rt08.pilang.my.id/
-    Atau di googlesheet
-    https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yLfsQ/edit?gid=387111055#gid=387111055`;
-
-  var area = document.getElementById('buktiPrintArea');
-  if (!area) {
-    showToast('Area bukti tidak ditemukan', 'error');
-    return;
-  }
-
-  showToast('Menyiapkan gambar & membuka WhatsApp...', 'info');
-
-  html2canvas(area, {
-    scale: 2.5,
-    backgroundColor: '#ffffff',
-    useCORS: true,
-    allowTaint: true,
-    logging: false
-  }).then(function(canvas) {
-    // 1. Download gambar dulu
-    var link = document.createElement('a');
-    link.download = 'Bukti-Pembayaran-RT08.png';
-    link.href = canvas.toDataURL('image/png');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    // 2. Buka WhatsApp
-    setTimeout(function() {
-      var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
-      window.open(waUrl, '_blank');
-      showToast('Gambar sudah diunduh. Silakan lampirkan di chat WA', 'success');
-    }, 600);
-
-  }).catch(function(err) {
-    console.error(err);
-    // Fallback: tetap buka WA meski gagal generate gambar
-    var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
-    window.open(waUrl, '_blank');
-    showToast('Gagal membuat gambar. WhatsApp sudah dibuka, kirim manual ya', 'error');
-  });
-}
 
     function closeBuktiModal() {
       document.getElementById('buktiModal').classList.remove('active');
     }
 
-    function shareBuktiToWA() {
-      var phone = (document.getElementById('waNumberInput').value || '').trim();
-      if (!phone) {
-        showToast('Masukkan nomor WhatsApp terlebih dahulu', 'error');
+    function downloadBuktiImage() {
+      var area = document.getElementById('buktiPrintArea');
+      if (!area) {
+        showToast('Area bukti tidak ditemukan', 'error');
         return;
       }
 
-      // Normalisasi nomor
-      phone = phone.replace(/\D/g, '');
-      if (phone.startsWith('0')) phone = '62' + phone.substring(1);
-      if (!phone.startsWith('62')) phone = '62' + phone;
+      showToast('Sedang membuat gambar...', 'info');
+
+      html2canvas(area, {
+        scale: 2.5,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        allowTaint: true,
+        logging: false
+      }).then(function(canvas) {
+        var link = document.createElement('a');
+        link.download = 'Bukti-Pembayaran-RT08-' + Date.now() + '.png';
+        link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast('Gambar berhasil diunduh!', 'success');
+      }).catch(function(err) {
+        console.error(err);
+        showToast('Gagal membuat gambar. Coba lagi.', 'error');
+      });
+    }
+
+    function shareBuktiToWA() {
+      var area = document.getElementById('buktiPrintArea');
+      if (!area) {
+        showToast('Area bukti tidak ditemukan', 'error');
+        return;
+      }
 
       var text = `Bukti Pembayaran
 Terima Kasih 🙏🏻🙏🏻
@@ -1401,36 +1344,81 @@ https://rt08.pilang.my.id/
 Atau di googlesheet
 https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yLfsQ/edit?gid=387111055#gid=387111055`;
 
-      var area = document.getElementById('buktiPrintArea');
-      if (!area) {
-        showToast('Area bukti tidak ditemukan', 'error');
-        return;
-      }
-
-      showToast('Menyiapkan gambar bukti...', 'info');
+      showToast('Menyiapkan gambar...', 'info');
 
       html2canvas(area, {
-        scale: 2,
+        scale: 2.5,
         backgroundColor: '#ffffff',
-        useCORS: true
+        useCORS: true,
+        allowTaint: true,
+        logging: false
       }).then(function(canvas) {
-        // Download gambar
+
+        canvas.toBlob(function(blob) {
+          if (!blob) {
+            fallbackShare(text);
+            return;
+          }
+
+          var file = new File([blob], 'Bukti-Pembayaran-RT08.png', { type: 'image/png' });
+
+          // Coba Web Share API (paling otomatis di HP modern)
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({
+              files: [file],
+              title: 'Bukti Pembayaran RT 08',
+              text: text
+            }).then(function() {
+              showToast('Berhasil dibagikan!', 'success');
+            }).catch(function(err) {
+              console.log('Share dibatalkan atau gagal:', err);
+              fallbackShare(text, canvas);
+            });
+          } else {
+            // Browser tidak support → fallback
+            fallbackShare(text, canvas);
+          }
+        }, 'image/png');
+
+      }).catch(function(err) {
+        console.error(err);
+        showToast('Gagal membuat gambar', 'error');
+        fallbackShare(text);
+      });
+    }
+
+    function fallbackShare(text, canvas) {
+      // Download gambar jika ada
+      if (canvas) {
         var link = document.createElement('a');
         link.download = 'Bukti-Pembayaran-RT08.png';
         link.href = canvas.toDataURL('image/png');
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+      }
 
-        // Buka WhatsApp
-        var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
-        window.open(waUrl, '_blank');
+      // Ambil nomor WA
+      var phoneInput = document.getElementById('waNumberInput');
+      var phone = (phoneInput ? phoneInput.value : '').trim();
+      
+      if (phone) {
+        phone = phone.replace(/\D/g, '');
+        if (phone.startsWith('0')) phone = '62' + phone.substring(1);
+        if (!phone.startsWith('62')) phone = '62' + phone;
 
-        showToast('Gambar diunduh. Silakan lampirkan di chat WhatsApp', 'success');
-      }).catch(function(err) {
-        console.error(err);
-        var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
-        window.open(waUrl, '_blank');
-        showToast('Gagal membuat gambar, tapi WhatsApp sudah dibuka', 'error');
-      });
+        setTimeout(function() {
+          var waUrl = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(text);
+          window.open(waUrl, '_blank');
+          showToast('Gambar diunduh. Silakan lampirkan di chat WA', 'success');
+        }, 500);
+      } else {
+        setTimeout(function() {
+          var waUrl = 'https://wa.me/?text=' + encodeURIComponent(text);
+          window.open(waUrl, '_blank');
+          showToast('Gambar diunduh. Pilih kontak WA lalu lampirkan gambar', 'info');
+        }, 500);
+      }
     }
 
     function normalizeRumah(value) {
@@ -1523,6 +1511,7 @@ https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yL
       };
       if (!d.nama) { showToast('Nama harus diisi', 'error'); return; }
       d.action = rowIdx ? 'editTransaction' : 'addTransaction';
+      d.token = getAuthToken();
       if (rowIdx) d.rowIndex = parseInt(rowIdx);
       var btn = document.getElementById('btnSave');
       btn.disabled = true;
@@ -1545,7 +1534,7 @@ https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yL
       if (!requireAuth('menghapus transaksi')) return;
       if (!confirm('Yakin ingin menghapus transaksi ini?')) return;
       var sheetName = document.getElementById('sheetSelect').value;
-      apiPost({ action: 'deleteTransaction', sheet: sheetName, rowIndex: rowIdx }).then(function (r) {
+      apiPost({ action: 'deleteTransaction', sheet: sheetName, rowIndex: rowIdx, token: getAuthToken() }).then(function (r) {
         if (r.error) { showToast(r.error, 'error'); return; }
         showToast('Berhasil dihapus', 'success');
         loadData(sheetName);
@@ -1555,7 +1544,7 @@ https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yL
     function createNewMonth() {
       var bulan = document.getElementById('newMonthBulan').value;
       var tahun = document.getElementById('newMonthTahun').value;
-      apiPost({ action: 'addSheet', monthName: bulan + ' ' + tahun }).then(function (r) {
+      apiPost({ action: 'addSheet', monthName: bulan + ' ' + tahun, token: getAuthToken() }).then(function (r) {
         if (r.error) { showToast(r.error, 'error'); return; }
         showToast(r.message || 'Berhasil!', 'success');
         closeNewMonthModal();
@@ -1569,7 +1558,7 @@ https://docs.google.com/spreadsheets/d/1KXB6N_sOGKAK1XvFQtwkTMAo4JlnmK4wuvL394yL
       var rowIdx = parseInt(document.getElementById('imgRowIndex').value);
       var colIdx = parseInt(document.getElementById('imgColIndex').value) || 5;
       var link = document.getElementById('imgLinkInput').value.trim();
-      apiPost({ action: 'saveImageLink', sheet: sheetName, rowIndex: rowIdx, colIndex: colIdx, linkGambar: link }).then(function (r) {
+      apiPost({ action: 'saveImageLink', sheet: sheetName, rowIndex: rowIdx, colIndex: colIdx, linkGambar: link, token: getAuthToken() }).then(function (r) {
         if (r.error) { showToast(r.error, 'error'); return; }
         showToast('Link gambar berhasil disimpan', 'success');
         closeImageModal();
